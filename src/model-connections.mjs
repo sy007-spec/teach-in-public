@@ -17,6 +17,8 @@ export function modelConnections(store,{runtime,fetcher,hosting}={}){
   if(selected?.id==='legacy-gemini'&&keys===undefined)store.set('modelConnection:'+id,legacyGemini());
   pool(id).configure({enabled:true,provider:body.provider,baseURL:body.baseURL,model:body.model,cooldownHours:body.cooldownHours,keys});
   const entry={id,name,enabled:false};if(selected)i.profiles.splice(i.profiles.indexOf(selected),1,entry);else i.profiles.push(entry);
+ }else if(body.action==='reset_cooldown'){
+  if(!selected)fail(404,'Saved connection not found');pool(selected.id).resetHealth();
  }else if(body.action==='enable'||body.action==='disable'){
   if(!selected)fail(404,'Saved connection not found');selected.enabled=body.action==='enable';if(selected.enabled)i.active=selected.id;else if(i.active===selected.id)i.active=null;
  }else fail(400,'Invalid configuration action');

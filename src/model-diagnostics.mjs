@@ -4,7 +4,7 @@ const identifier=v=>typeof v==='string'&&/^[a-zA-Z0-9_.:/-]{1,200}$/.test(v)?v:n
 const number=v=>Number.isFinite(Number(v))&&Number(v)>=0?Number(v):null;
 export function modelFailureCode(data,status){
  const error=(Array.isArray(data)?data[0]?.error:data?.error)||{},message=String(error.message||'');
- if(/free tier is not available|enable billing|billing.*required/i.test(message))return 'model_billing_required';
+ if(status===402||/free tier is not available|enable billing|billing.*required|insufficient balance/i.test(message))return 'model_billing_required';
  if(/invalid auth key|api key not valid|invalid api key|API_KEY_INVALID|api key.*expired|api key.*not found/i.test(message)||status===401)return 'model_auth_invalid';
  if(status===403)return 'model_permission_denied';if(status===429)return 'model_rate_limit';if(status===400||status===404)return 'model_request_rejected';if(status>=500)return 'model_provider_unavailable';return 'model_request_failed';
 }
