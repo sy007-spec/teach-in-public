@@ -24,5 +24,6 @@ export function modelConnections(store,{runtime,fetcher,hosting}={}){
  }else fail(400,'Invalid configuration action');
  i.revision++;store.set('modelConnections',i);return describe();
  }
- return {describe,update:body=>store.transaction(()=>update(body)),request:async(messages,options)=>{const i=index(),active=i.profiles.find(p=>p.id===i.active&&p.enabled);if(!active)fail(503,'No enabled connection');return pool(active.id).request(messages,options)}};
+ async function test(id){const p=index().profiles.find(x=>x.id===id);if(!p)fail(404,'Saved connection not found');return pool(p.id).probe()}
+ return {describe,test,update:body=>store.transaction(()=>update(body)),request:async(messages,options)=>{const i=index(),active=i.profiles.find(p=>p.id===i.active&&p.enabled);if(!active)fail(503,'No enabled connection');return pool(active.id).request(messages,options)}};
 }

@@ -281,6 +281,7 @@ export function createApp(options={}){
     if(p==='/api/admin/knowledge-impact'){if(req.method==='GET')return json(res,200,url.searchParams.get('id')?impactDetail(url.searchParams.get('id')):impactSummary(url.searchParams));if(req.method==='POST')return json(res,200,impact.rate(body.id,body.rating,actor(s)));fail(405,'Method not allowed');}
     if(p==='/api/admin/course-ai'&&req.method==='GET')return json(res,200,modelPool.describe());
     if(p==='/api/admin/models'&&req.method==='GET')return json(res,200,models.describe());
+    if(p==='/api/admin/models/test'&&req.method==='POST'){const result=await models.test(String(body?.id||''));audit(s,'model.connection-tested',{id:body.id,ok:result.results.filter(r=>r.ok).length,failed:result.results.filter(r=>!r.ok).length});return json(res,200,result)}
     if(p==='/api/admin/models'&&req.method==='PUT'){const result=models.update(body);audit(s,'model.connection-updated',{action:body.action,id:body.id||null});return json(res,200,result)}
     if(p==='/api/admin/course-ai'&&req.method==='PUT'){const result=modelPool.configure(body);audit(s,'gemini-pool.configured',{});return json(res,200,result)}
     if(p==='/api/admin/ai'&&req.method==='GET')return json(res,200,ai.describe());
