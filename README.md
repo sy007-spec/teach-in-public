@@ -69,6 +69,21 @@ Hosted content storage is 100 MB (Basic) / 500 MB (Advanced); sources, parsed co
 
 个人设置按适配器描述显示身份状态与绑定操作。未安装适配器时不显示外部身份入口。原统计卡片和卡片审批继续独立配置。
 
+### 大模型与知识库：设计摘要
+
+本节只做索引，细则见各规格；不包含任何部署方的拓扑或密钥。
+
+| 主题 | 设计 | 规格 |
+|---|---|---|
+| 模型来源 | 唯一顺序：课堂已启用的自有连接（OpenAI 兼容或 Gemini 多密钥池）→ 托管方注入且套餐允许的平台模型 → 报告不可用。独立安装没有平台模型；失败不静默换供应商 | 本节下方 “Saved AI connections” |
+| 冷却 | 密钥无效、计费（含 402）、权限：按配置冷却（默认 24 小时）；超时、限流、5xx、无效 JSON：5 分钟，Retry-After 最多 1 小时；调用方取消不冷却；单次调用 45 秒；管理员可清除冷却 | 下方 “Gemini 轮询” |
+| 课程答疑 | 仅当前课程、业务版本的已发布学员可见正文与获批资料；必须引用原文并单独核验事实，无依据拒答 | [AI_TUTOR_SPEC.md](AI_TUTOR_SPEC.md)、[KNOWLEDGE_COURSE_CONTEXT.md](KNOWLEDGE_COURSE_CONTEXT.md) |
+| 知识库 | SQLite FTS5 + sqlite-vec，本地固定版多语言 E5-small 向量；正文不出服务器，无需 Embedding 密钥；修订、撤回即失效 | [COURSE_KNOWLEDGE_SPEC.md](COURSE_KNOWLEDGE_SPEC.md)、[KNOWLEDGE_REVISION_SYNC.md](KNOWLEDGE_REVISION_SYNC.md) |
+| 资料自动提炼 | 管理员开启后，课程资料或绑定群讨论提炼为待复核卡片，不自动授权答疑 | [KNOWLEDGE_PIPELINE_SPEC.md](KNOWLEDGE_PIPELINE_SPEC.md) |
+| 效果与用量 | 每次 HTTP 调用和检索→引用→核验链路可查；未知用量显示未知，不推算费用 | [KNOWLEDGE_IMPACT_SPEC.md](KNOWLEDGE_IMPACT_SPEC.md) |
+
+管理入口只有两个：课堂管理员的“大模型配置”（连接、冷却、诊断、知识效果），以及课程筹建/课程资料（资料审核、批准与撤回）。
+
 ### AI 课程答疑
 
 提问会自动使用当前已发布课程资料生成回答，显示引用篇章；学习者可以继续追问。优先使用课堂已配置的自有模型，未配置时使用套餐允许的平台模型。无模型、超时或资料不足会明确显示，问题始终保留。教材更新后旧答案需重新生成；AI回答不替代讲师审核。纯图片问题请补充文字描述。详细边界见 [AI_TUTOR_SPEC.md](AI_TUTOR_SPEC.md)。
