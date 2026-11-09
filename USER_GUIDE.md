@@ -250,3 +250,17 @@ Instructor and learner messages retain their original text. Use “译 English�
 作者可以在自己的提问或回复下点击“编辑”，选择“保存修改”或“保存并重新生成回答”。系统保留已有回复、附件与修改记录，标记“作者已修改”，并使旧AI回答和译文失效；多人同时修改时要求刷新后再保存。问答、翻译与弹窗中的 Markdown 和 Mermaid 使用同一安全渲染方式，图形可全屏缩放拖动。
 
 Authors can edit their own questions or replies and choose “Save changes” or “Save & regenerate answer”. Existing replies, attachments and edit history are retained; edited messages are labelled and previous AI answers/translations become stale. Concurrent edits require a reload. Discussions, translations and dialogs render Markdown and Mermaid safely, with full-window zoom and pan for diagrams.
+
+
+### 重新授权与时长调整 / Reauthorization and duration
+
+访问审批中的已撤销、已拒绝申请可由管理员指定 1–2160 小时重新授权；已批准许可也可调整时长，新到期时间从本次保存计算，不扩大为 IP 白名单。分享阅读受课程分享时长上限限制：撤销的链接可重新授权；单个访客可撤销后指定时长再次批准，期限从下次获准阅读起计算；已批准访客调整时长则沿用原阅读开始时间，不改变其他邮箱访客的期限。同一链接同一邮箱沿用同一阅读期限。恢复整条链接不会恢复单独撤销的访客许可。订阅失效或教材未公开时不能新增授权。
+
+Administrators can reauthorize revoked or denied personal access for 1–2160 hours, or adjust an existing grant from the time of saving, without adding an IP allowlist entry. Shared-reading durations remain capped by the course policy. A revoked link can be restored. Individually reauthorized visitors receive a fresh window at their next approved reading; adjusting an approved visitor keeps their original start time and does not change other emails’ windows. The same email on the same link shares one window. Restoring a link does not restore individually revoked visitors. Expired hosting subscriptions or unpublished material cannot receive new sharing authorization.
+
+
+### 授权统计与课程内搜索
+
+访问审批和分享访客授权列表支持按访问次数、有效学习时长、剩余授权时间、最近访问、姓名、邮箱或申请时间排序，并可按状态及关键词筛选。普通账户访问次数为课程访问会话数，有效阅读时长以活动心跳计算，显示最近 7 天；分享阅读按同一链接、同一邮箱汇总最近 90 天的阅读业务统计。未开始阅读、授权到期和撤销状态分别标识；数据不是用户实际理解程度的证明。
+
+教材工具栏的搜索按钮可在课程内查询双语教材、已批准引用的知识库资料、可见提问及中英文回答。结果支持分类、分页、原位预览、返回结果及跳转教材。Markdown 和 Mermaid 使用现有安全渲染器。搜索为本地关键词检索，不调用收费模型；课程切换、撤回资料、私密讨论和当前业务版本权限在服务端重新检查。过期 AI 回答不会作为当前可靠答案命中；原始讨论仍保留。知识库资料修订后需要重新批准才能在学习者搜索中出现。

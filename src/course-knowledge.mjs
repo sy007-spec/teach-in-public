@@ -43,5 +43,5 @@ export function courseKnowledge(store,{material,embedding=embedKnowledge}={}){
   return [...selected.values()].map(p=>({id:p.id,title:{zh:p.title,en:p.title},section:p.section,text:p.text,page:p.page,lesson:p.lesson,document:p.document_id,documentRevision:p.document_revision,knowledge:true}));
  }
  function source(c,id){const row=store.get('SELECT id,title,section,text,page,lesson,document_id,document_revision FROM knowledge_chunks WHERE id=? AND scope=? AND fingerprint=?',id,scope(c),signature(c));if(!row)fail(404,'Source withdrawn, changed or unavailable');return row}
- return {describe,approve,ensure,search,source,signature};
+ return {describe,approve,ensure,search,source,signature,publicSnapshot:snapshot};
 }
