@@ -264,3 +264,12 @@ Administrators can reauthorize revoked or denied personal access for 1–2160 ho
 访问审批和分享访客授权列表支持按访问次数、有效学习时长、剩余授权时间、最近访问、姓名、邮箱或申请时间排序，并可按状态及关键词筛选。普通账户访问次数为课程访问会话数，有效阅读时长以活动心跳计算，显示最近 7 天；分享阅读按同一链接、同一邮箱汇总最近 90 天的阅读业务统计。未开始阅读、授权到期和撤销状态分别标识；数据不是用户实际理解程度的证明。
 
 教材工具栏的搜索按钮可在课程内查询双语教材、已批准引用的知识库资料、可见提问及中英文回答。结果支持分类、分页、原位预览、返回结果及跳转教材。Markdown 和 Mermaid 使用现有安全渲染器。搜索为本地关键词检索，不调用收费模型；课程切换、撤回资料、私密讨论和当前业务版本权限在服务端重新检查。过期 AI 回答不会作为当前可靠答案命中；原始讨论仍保留。知识库资料修订后需要重新批准才能在学习者搜索中出现。
+
+
+### 新学员限时自动授权 / Scheduled first-visit access
+
+管理员进入「访问审批 → 新学员自动授权」，选择课程、启用开关、开始和结束时间，并设置每人授权时长（默认 24 小时，范围 1–2160 小时）。各课程独立配置，默认关闭。时间输入采用浏览器显示的时区，服务器统一保存 UTC；开始时刻包含在内，结束时刻不包含。
+
+新学员需输入课程口令并完成账户安全验证，首次进入该课程时才可能领取一次授权。按邮箱账户识别，已有访问、申请或继承授权记录的用户不重复领取；教师、管理员及已经具有访问权限的人不另增授权。授权绑定当前浏览器和 IP，与人工批准本人一致，不扩大 IP 白名单。活动结束、关闭或修改不会追溯更改已有授权的到期时间；撤销后不再自动补发，管理员仍可手动重新授权。列表标记「首次访问自动授权」。
+
+In Access requests, administrators configure each course independently: enable the campaign, set start/end times in the displayed browser timezone, and choose 1–2160 access hours (24 by default). Campaigns are off by default. Verified first-time course learners receive at most one personal grant during the start-inclusive, end-exclusive window. Previous visitors/applicants and revoked users are not re-enrolled automatically. Existing access remains unchanged; stopping or editing a campaign does not change grants already issued. Grants retain the same browser/IP restrictions and manual revocation controls as personal approvals.
