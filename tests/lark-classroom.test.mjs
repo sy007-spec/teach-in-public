@@ -2,6 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {createApp} from '../src/server.mjs';import {testMaterial,source} from './fixtures/markdown.mjs';import {testEmbedding} from './fixtures/embedding.mjs';
 import {splitTrainingLanguages} from '../src/markdown-import.mjs';
 import {pathToFileURL} from 'node:url';
+import {dayKey} from '../src/security.mjs';
 // The classroom assistant needs the private lark-feishu-assist module, which the hosting platform injects.
 // Point LARK_FEISHU_ASSIST at its src/index.mjs to run these tests (the hosting repository does); otherwise they are skipped.
 const libPath=process.env.LARK_FEISHU_ASSIST;
@@ -77,7 +78,8 @@ test('classroom group discussion becomes a cleaned course source and an unpublis
  assert.equal((await f.call('/api/admin/lark/classrooms','PUT',{chatId:'oc_extern1',courseId:'pamm'})).status,409);
  assert.equal((await f.call('/api/admin/lark/classrooms','PUT',{chatId:'oc_class01',courseId:'pamm'})).status,200);
  // Discussion, noise, personal data, a question to the bot, a command and a recalled message.
- const t0=Date.now()-60000;
+ // Keep both discussion topics on one completed day, including around midnight.
+ const day=dayKey(new Date(Date.now()-86400000)),t0=Date.parse(day+'T12:00:00+08:00');
  await f.say('老师，止损单和限价单有什么区别？',{time:t0});await f.say('好的',{time:t0+1000});await f.say('👍',{time:t0+2000});
  await f.say('止损单在价格触及后转为市价单成交',{from:'ou_learner2',time:t0+3000});
  await f.say('有问题联系我 '+phone,{from:'ou_learner2',time:t0+4000});
@@ -97,16 +99,16 @@ test('classroom group discussion becomes a cleaned course source and an unpublis
  const before=f.store.get('SELECT COUNT(*) n FROM lark_classroom_messages').n;await f.say('止损单在价格触及后转为市价单成交',{id:'om_in4',from:'ou_learner2',time:t0+3000});await new Promise(r=>setTimeout(r,50));
  assert.equal(f.store.get('SELECT COUNT(*) n FROM lark_classroom_messages').n,before);
  // Digest + draft.
- const first=(await f.call('/api/admin/lark/classrooms/digest','POST',{chatId:'oc_class01',draft:true})).data;
+ const first=(await f.call('/api/admin/lark/classrooms/digest','POST',{chatId:'oc_class01',day,draft:true})).data;
  assert.equal(first.digest.state,'saved');assert.equal(first.draft.state,'drafted',JSON.stringify(first.draft));assert.equal(first.draft.replaced,false);
  const doc=f.store.get("SELECT * FROM preparation_documents WHERE course_id='pamm' AND kind='reference'");
  assert.match(doc.raw,/止损单和限价单/);assert.match(doc.raw,/保证金不足/);assert.doesNotMatch(doc.raw,new RegExp(phone));assert.doesNotMatch(doc.raw,/这条发错了|好的|👍|ou_learner/);
  assert.match(doc.raw,/参与者A/);assert.doesNotMatch(doc.raw,/爬山/,'off-topic discussion is left out by the key description');assert.match(doc.raw,/关键说明范围外/);assert.equal(doc.source_ref.startsWith('lark:oc_class01:'),true);
  const course=()=>({...f.store.get("SELECT draft,published FROM courses WHERE id='pamm'")});assert.deepEqual(course(),{draft:2,published:1});
  // Nothing new → unchanged; new discussion → same source updated and the classroom's own draft replaced, still unpublished.
- assert.equal((await f.call('/api/admin/lark/classrooms/digest','POST',{chatId:'oc_class01'})).data.digest.state,'unchanged');
+ assert.equal((await f.call('/api/admin/lark/classrooms/digest','POST',{chatId:'oc_class01',day})).data.digest.state,'unchanged');
  await f.say('杠杆比例越高，强平风险越大',{from:'ou_learner3',time:t0+8000});await f.until(()=>f.store.get('SELECT COUNT(*) n FROM lark_classroom_messages WHERE text LIKE ?','%强平%').n===1,'new message');
- const second=(await f.call('/api/admin/lark/classrooms/digest','POST',{chatId:'oc_class01',draft:true})).data;
+ const second=(await f.call('/api/admin/lark/classrooms/digest','POST',{chatId:'oc_class01',day,draft:true})).data;
  assert.equal(second.digest.documentId,first.digest.documentId);assert.equal(second.draft.replaced,true);assert.deepEqual(course(),{draft:2,published:1});
  assert.equal(f.store.get("SELECT COUNT(*) n FROM preparation_documents WHERE kind='reference'").n,1);
  assert.equal(f.aiCalls(),2);
