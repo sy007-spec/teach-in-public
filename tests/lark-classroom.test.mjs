@@ -14,12 +14,12 @@ const encryptKey=['enc','test','key'].join('-'),verificationToken=['vt','test','
 const phone='1'+'3912345678';
 
 function fakeLark(){
- const sent=[];
+ const sent=[],removed=new Set();
  const fetch=async(url,init={})=>{const u=new URL(url),body=init.body?JSON.parse(init.body):undefined,p=u.pathname;
   // App IDs starting with cli_lark only exist on Lark, so Feishu rejects them (platform detection).
   if(p.endsWith('/tenant_access_token/internal'))return u.origin==='https://open.feishu.cn'&&String(body?.app_id).startsWith('cli_lark')?Response.json({code:10014,msg:'app not found'}):Response.json({code:0,tenant_access_token:'t',expire:7200});
   if(p==='/open-apis/im/v1/chats/oc_class01')return Response.json({code:0,data:{name:'外汇入门 1 班',external:false,owner_id_type:'open_id',owner_id:'ou_owner'}});
-  if(p==='/open-apis/im/v1/chats/oc_class01/members'){const union=u.searchParams.get('member_id_type')==='union_id';return Response.json({code:0,data:{items:[['ou_owner','on_owner','王老师'],['ou_m1','on_m1','学员甲'],['ou_m2','on_m2','学员乙']].map(([o,n,name])=>({member_id:union?n:o,name})),has_more:false}})}
+  if(p==='/open-apis/im/v1/chats/oc_class01/members'){const union=u.searchParams.get('member_id_type')==='union_id';return Response.json({code:0,data:{items:[['ou_owner','on_owner','王老师'],['ou_m1','on_m1','学员甲'],['ou_m2','on_m2','学员乙']].filter(([id])=>!removed.has(id)).map(([o,n,name])=>({member_id:union?n:o,name})),has_more:false}})}
   if(p==='/open-apis/bot/v3/info')return Response.json({code:0,bot:{open_id:'ou_bot',app_name:'课堂助手'}});
   if(p==='/open-apis/tenant/v2/tenant/query')return Response.json({code:0,data:{tenant:{tenant_key:'tk',name:'Org'}}});
   if(p==='/open-apis/im/v1/chats')return Response.json({code:0,data:{items:[{chat_id:'oc_class01',name:'外汇入门 1 班',external:false},{chat_id:'oc_extern1',name:'外部群',external:true}],has_more:false}});
@@ -39,15 +39,16 @@ function fakeLark(){
   if(init.method==='POST'&&p.startsWith('/open-apis/im/v1/messages')){sent.push({path:p,origin:u.origin,body});return Response.json({code:0,data:{message_id:'om_sent'+sent.length}})}
   return Response.json({code:404,msg:'unexpected '+p},{status:404});
  };
- return {fetch,sent};
+ return {fetch,sent,removeMember:id=>removed.add(id)};
 }
 
 // Stand-in for the official SDK's long connection: records options and exposes the registered handlers.
 function fakeSdk(){const state={};return {state,sdk:{Domain:{Feishu:'feishu-domain',Lark:'lark-domain'},LoggerLevel:{fatal:0},EventDispatcher:class{register(h){state.handlers=h;return this}},WSClient:class{constructor(o){state.options=o;state.closed=false}start(){state.started=true}close(){state.closed=true}}}}}
 
 async function fixture({sdk}={}){
+ let collectionOwner=null;
  const runtime=fs.mkdtempSync(path.join(os.tmpdir(),'lark-classroom-')),lark=fakeLark();let aiCalls=0;
- let addon=true;const hosting={allowLegacyAdmin:true,status:()=>({active:true,tier:'advanced',limits:{globalModel:true,courses:null},addons:{larkAssistant:addon}}),globalModel:async()=>({baseURL:'https://example.test/v1',model:'test',key:['model','key'].join('-')})};
+ let addon=true;const hosting={collectionOwner:()=>collectionOwner,allowLegacyAdmin:true,status:()=>({active:true,tier:'advanced',limits:{globalModel:true,courses:null},addons:{larkAssistant:addon}}),globalModel:async()=>({baseURL:'https://example.test/v1',model:'test',key:['model','key'].join('-')})};
  const app=createApp({runtime,seedMaterial:testMaterial(),scheduler:false,hosting,larkAssist:lib,larkSdk:sdk,briefSchedule:()=>{},embedding:testEmbedding,larkFetch:lark.fetch,aiFetch:async()=>{aiCalls++;return Response.json({choices:[{message:{content:JSON.stringify(Object.fromEntries(splitTrainingLanguages(source()).map(f=>[f.language,f.markdown])))},finish_reason:'stop'}],usage:{total_tokens:10}})}});
  await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;
  let csrf='';const jar={};
@@ -59,7 +60,7 @@ async function fixture({sdk}={}){
  let m=0;
  const say=(text,o={})=>deliver('im.message.receive_v1',{sender:{sender_id:{open_id:o.from||'ou_learner1'},sender_type:'user',tenant_key:'tk'},message:{message_id:o.id||'om_in'+(++m),chat_id:o.chat||'oc_class01',chat_type:'group',message_type:'text',create_time:String(o.time||Date.now()),content:JSON.stringify({text:o.at?'@_user_1 '+text:text}),mentions:o.at?[{key:'@_user_1',id:{open_id:'ou_bot'},name:'课堂助手'}]:[]}});
  const until=async(check,label)=>{for(let i=0;i<200;i++){if(check())return;await new Promise(r=>setTimeout(r,10))}assert.fail('timed out: '+label)};
- return {app,store:app.store,call,deliver,say,until,lark,aiCalls:()=>aiCalls,base,setAddon:v=>{addon=v},async close(){await app.close();fs.rmSync(runtime,{recursive:true,force:true})}};
+ return {app,store:app.store,call,deliver,say,until,lark,aiCalls:()=>aiCalls,base,setCollectionOwner:v=>{collectionOwner=v},setAddon:v=>{addon=v},async close(){await app.close();fs.rmSync(runtime,{recursive:true,force:true})}};
 }
 
 test('classroom group discussion becomes a cleaned course source and an unpublished draft',{skip},async()=>{const f=await fixture();try{
@@ -200,3 +201,37 @@ test('一键备课: group history, shared documents and attachments become cours
  await f.until(()=>f.lark.sent.some(x=>x.path==='/open-apis/im/v1/messages/om_cmd2/reply'),'reply');
  assert.match(JSON.parse(f.lark.sent.find(x=>x.path==='/open-apis/im/v1/messages/om_cmd2/reply').body.content).text,/只有群主/);
 }finally{await f.close()}});
+
+
+test('collection handoff disables consumers and writes while preserving verified course members',{skip},async()=>{
+ const ws=fakeSdk(),f=await fixture({sdk:ws.sdk});try{
+  assert.equal((await f.call('/api/admin/lark','PUT',{appId:'cli_test',appSecret:'test-only',encryptKey,verificationToken})).status,200);
+  assert.equal((await f.call('/api/admin/lark/classrooms','PUT',{chatId:'oc_class01',courseId:'pamm'})).status,200);
+  f.app.classroom.connect();assert.equal(ws.state.started,true);
+  const before=f.store.get('SELECT COUNT(*) n FROM lark_classroom_messages').n;
+  f.setCollectionOwner({source:'coworker',url:'https://coworker.example.test/'});
+  assert.equal(f.app.classroom.connect().state,'external');assert.equal(ws.state.closed,true);
+  assert.equal((await f.say('should not be ingested')).status,200);
+  await new Promise(r=>setTimeout(r,30));
+  assert.equal(f.store.get('SELECT COUNT(*) n FROM lark_classroom_messages').n,before);
+  for(const [endpoint,body] of [['/api/admin/lark',{appId:'cli_other'}],['/api/admin/lark/classrooms',{chatId:'oc_class01',courseId:null}]])assert.equal((await f.call(endpoint,'PUT',body)).status,409);
+  for(const endpoint of ['prepare','digest'])assert.equal((await f.call('/api/admin/lark/classrooms/'+endpoint,'POST',{chatId:'oc_class01'})).status,409);
+  assert.equal((await f.call('/api/materials/documents?course=pamm','POST',{title:'blocked'})).status,409);
+  for(const name of ['scanHistory','ingest','prepare','distill','draft'])await assert.rejects(()=>f.app.classroom[name]('oc_class01'),{status:409});
+  await f.app.classroom.tick({force:true});
+  assert.equal(f.aiCalls(),0);assert.equal(f.lark.sent.length,0);
+  assert.equal(f.app.classroom.allows('pamm',{lark_id:'ou_m1'}),true);
+  assert.equal(f.app.classroom.allows('pamm',{lark_id:'ou_unknown'}),false);
+  const data=(await f.call('/api/admin/lark/classrooms?refresh=1')).data;
+  assert.equal(data.collectionOwner.source,'coworker');assert.equal(data.classrooms.length,1,'refresh does not discover or bind new chats');
+  assert.equal(f.store.get("SELECT published FROM courses WHERE id='pamm'").published,1);
+  f.store.run("UPDATE lark_classrooms SET members_synced='2000-01-01T00:00:00.000Z' WHERE chat_id='oc_class01'");
+  assert.equal(f.app.classroom.allows('pamm',{lark_id:'ou_m1'}),false,'stale membership cannot preserve access indefinitely');
+  assert.deepEqual(f.app.classroom.owners(),[],'stale group ownership cannot approve course access');
+  f.lark.removeMember('ou_m1');await f.app.classroom.tick({force:true});
+  assert.equal(f.app.classroom.allows('pamm',{lark_id:'ou_m1'}),false,'removed member loses access after read-only refresh');
+  assert.equal(f.app.classroom.allows('pamm',{lark_union:'on_m1'}),false,'union identity is revoked too');
+  assert.equal(f.app.classroom.allows('pamm',{lark_id:'ou_m2'}),true,'remaining member keeps access');
+
+ }finally{await f.close()}
+});

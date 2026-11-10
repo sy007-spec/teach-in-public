@@ -17,8 +17,9 @@ const DAY_MS=86400000,QUIET_MS=10*60000,DRAFT_INTERVAL_MS=6*3600000,TEXT_MAX=800
 const shanghaiDay=ms=>new Date(ms+8*3600000).toISOString().slice(0,10);
 const dayStart=day=>Date.parse(day+'T00:00:00+08:00');
 
-export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=()=>'',fetch,now=Date.now,sdk=null,manualAdmins=()=>[],onCardAction,onQuestion,onQuestionReview,onRemoved,extract=null,vision=null,autoPrepare=false,historyDays=180}){
+export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=()=>'',fetch,now=Date.now,sdk=null,manualAdmins=()=>[],onCardAction,onQuestion,onQuestionReview,onRemoved,extract=null,vision=null,autoPrepare=false,historyDays=180,collectionOwner=()=>null}){
  const {createAssistant,cleanDiscussion,discussionMarkdown,cards}=lib;
+ const requireCollection=()=>{if(collectionOwner())throw Object.assign(Error('采集已迁移至 coworker / Collection is managed by coworker'),{status:409})};
  let clientValue=null,clientKey='';
  const larkClient=()=>{const c=larkSettings(store);if(!c.appId||!c.appSecret)throw Error('Lark app credentials missing');const key=[larkDomain(c),c.appId,c.appSecret].join('\u0000');if(!clientValue||clientKey!==key){clientValue=lib.createLarkClient({domain:larkDomain(c),appId:c.appId,appSecret:c.appSecret,fetch});clientKey=key}return clientValue};
  store.db.exec(`CREATE TABLE IF NOT EXISTS lark_classrooms(chat_id TEXT PRIMARY KEY,course_id TEXT,name TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'pending',collect INTEGER NOT NULL DEFAULT 1,auto_draft INTEGER NOT NULL DEFAULT 1,external INTEGER NOT NULL DEFAULT 0,last_draft_at TEXT,last_draft_version INTEGER,last_error TEXT,created TEXT NOT NULL,updated TEXT NOT NULL);
@@ -40,7 +41,7 @@ export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=
   store.run('INSERT OR IGNORE INTO lark_classroom_messages(message_id,chat_id,course_id,sender,sender_type,type,text,thread_id,mentions_bot,time,day,received) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',item.messageId,item.chatId,courseId,item.sender?.openId||'',item.sender?.type||'user',item.type||'text',text,item.threadId||null,question?1:0,time,shanghaiDay(time),store.now());
  };
  /** Classroom administrators: owners of linked groups plus any manually registered open_ids. */
- const owners=({cardsOnly=false}={})=>store.all("SELECT DISTINCT owner_open_id id FROM lark_classrooms WHERE status='active' AND course_id IS NOT NULL AND owner_open_id IS NOT NULL"+(cardsOnly?' AND cards=1':'')).map(r=>r.id);
+ const owners=({cardsOnly=false}={})=>store.all("SELECT DISTINCT owner_open_id id FROM lark_classrooms WHERE status='active' AND course_id IS NOT NULL AND owner_open_id IS NOT NULL"+(cardsOnly?' AND cards=1':'')+(collectionOwner()?' AND members_synced>?':''),...(collectionOwner()?[new Date(now()-10*60000).toISOString()]:[])).map(r=>r.id);
  const admins=()=>new Set([...manualAdmins(),...owners()]);
  const MEMBER_ID=/^o[nu]_[A-Za-z0-9_-]{1,140}$/;
  const putMember=(chat,type,id,name)=>{if(id&&MEMBER_ID.test(id))store.run('INSERT INTO lark_classroom_members VALUES(?,?,?,?,?) ON CONFLICT DO UPDATE SET name=excluded.name,updated=excluded.updated',chat,type,id,String(name||'').slice(0,100),store.now())};
@@ -52,15 +53,16 @@ export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=
   const ownerName=open.find(m=>m.openId===info.ownerOpenId)?.name||'';
   store.transaction(()=>{
    store.run('UPDATE lark_classrooms SET manager_open_ids=? WHERE chat_id=?',JSON.stringify(info.managers.filter(id=>open.some(m=>m.openId===id))),chat);store.run('DELETE FROM lark_classroom_members WHERE chat_id=? AND id_type=?',chat,'open_id');putMembers(chat,open);
-   if(union){store.run('DELETE FROM lark_classroom_members WHERE chat_id=? AND id_type=?',chat,'union_id');putMembers(chat,union)}
+   if(union||collectionOwner()){store.run('DELETE FROM lark_classroom_members WHERE chat_id=? AND id_type=?',chat,'union_id');if(union)putMembers(chat,union)}
    store.run("UPDATE lark_classrooms SET owner_open_id=?,owner_name=?,name=CASE WHEN ?<>'' THEN ? ELSE name END,members_synced=?,updated=? WHERE chat_id=?",info.ownerOpenId,ownerName,info.name,String(info.name).slice(0,200),store.now(),store.now(),chat);
   });
   return {owner:info.ownerOpenId,members:open.length};
  }
  /** True when the signed-in user (Feishu/Lark identity) is a member of a group linked to the course. */
  function allows(courseId,user){
+  const freshAfter=collectionOwner()?new Date(now()-10*60000).toISOString():null;
   const ids=[['open_id',user?.lark_id],['union_id',user?.lark_union]].filter(([,v])=>typeof v==='string'&&MEMBER_ID.test(v));
-  return ids.some(([type,id])=>!!store.get("SELECT 1 FROM lark_classroom_members m JOIN lark_classrooms c ON c.chat_id=m.chat_id WHERE m.id_type=? AND m.member_id=? AND c.course_id=? AND c.status='active'",type,id,courseId));
+  return ids.some(([type,id])=>!!store.get("SELECT 1 FROM lark_classroom_members m JOIN lark_classrooms c ON c.chat_id=m.chat_id WHERE m.id_type=? AND m.member_id=? AND c.course_id=? AND c.status='active' AND (? IS NULL OR c.members_synced>?)",type,id,courseId,freshAfter,freshAfter));
  }
 
  // ---- Group materials → course reference sources ----
@@ -81,6 +83,7 @@ export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=
   return String(e.code||e.message||e).slice(0,200)};
  /** Reads pending materials and saves each as a reference source of the course (updated in place when it changes). */
  async function ingest(chat,{limit=40}={}){
+  requireCollection();
   const r=active(chat);if(!r)return {saved:0,unchanged:0,failed:0};
   const client=larkClient(),out={saved:0,unchanged:0,failed:0};
   for(const src of store.all("SELECT * FROM lark_classroom_sources WHERE chat_id=? AND status IN ('pending','failed') AND attempts<3 ORDER BY created LIMIT ?",chat,limit)){
@@ -111,6 +114,7 @@ export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=
  }
  /** Backfills the group's history: discussion for the digest and every document/attachment ever shared. */
  async function scanHistory(chat,{days=historyDays,maxPages=60}={}){
+  requireCollection();
   const r=active(chat);if(!r)return {messages:0,materials:0};
   const client=larkClient(),bot=larkSettings(store).botOpenId,from=new Date(now()-days*DAY_MS);let token,pages=0,messages=0;
   const before=store.get('SELECT COUNT(*) n FROM lark_classroom_sources WHERE chat_id=?',chat).n;
@@ -131,6 +135,7 @@ export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=
  const setPrepare=(chat,state)=>store.run('UPDATE lark_classrooms SET prepare_state=?,updated=? WHERE chat_id=?',JSON.stringify({...state,at:store.now()}),store.now(),chat);
  /** 一键备课: history → materials → daily digests → key description (via the draft) → course draft. */
  async function prepare(chat){
+  requireCollection();
   if(running.has(chat))return {state:'running'};const r=active(chat);if(!r)return {state:'inactive'};
   running.add(chat);const summary={};
   try{
@@ -155,6 +160,7 @@ export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=
  }
  /** Starts 一键备课 in the background; `notify` posts the result to the group. */
  function startPrepare(chat,{notify=false}={}){
+  requireCollection();
   if(running.has(chat))return {state:'running'};if(!active(chat))return {state:'inactive'};
   setPrepare(chat,{state:'running',step:'queued'});
   setImmediate(async()=>{const x=await prepare(chat);if(notify){try{await larkClient().sendText({type:'chat_id',id:chat},prepareText(x))}catch{/* best effort */}}});
@@ -202,6 +208,7 @@ export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=
 
  /** Digest one classroom-day into a course reference source. Returns {state:'saved'|'unchanged'|'empty'|'inactive'}. */
  async function distill(chat,day){
+  requireCollection();
   const r=active(chat);if(!r)return {state:'inactive'};
   const messages=store.all('SELECT * FROM lark_classroom_messages WHERE chat_id=? AND day=? AND course_id=? ORDER BY time',chat,day,r.course_id);
   const cleaned=cleanDiscussion(messages.map(m=>({messageId:m.message_id,text:m.text,time:m.time,sender:{openId:m.sender,type:m.sender_type},threadId:m.thread_id||undefined,deleted:!!m.deleted,mentionsBot:!!m.mentions_bot})),{brief:brief(r.course_id)});
@@ -219,6 +226,7 @@ export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=
 
  /** Regenerates the course draft when a digest changed since the last draft, at most once per interval. */
  async function draft(chat,{force=false}={}){
+  requireCollection();
   const r=active(chat);if(!r||!r.auto_draft&&!force)return {state:'disabled'};
   if(!store.get('SELECT 1 FROM lark_classroom_digests WHERE chat_id=? AND drafted=0',chat)&&!r.sources_dirty)return {state:'unchanged'};
   if(!force&&r.last_draft_at&&now()-Date.parse(r.last_draft_at)<DRAFT_INTERVAL_MS)return {state:'waiting'};
@@ -237,10 +245,12 @@ export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=
   if(busy||!force&&now()-lastTick<5*60000)return;busy=true;lastTick=now();
   try{
    for(const r of store.all("SELECT * FROM lark_classrooms WHERE status='active' AND course_id IS NOT NULL")){
+    if(!collectionOwner()){
     const days=store.all('SELECT m.day,MAX(m.time) last FROM lark_classroom_messages m LEFT JOIN lark_classroom_digests d ON d.chat_id=m.chat_id AND d.day=m.day WHERE m.chat_id=? AND m.day>=? AND (d.updated IS NULL OR m.received>d.updated) GROUP BY m.day',r.chat_id,shanghaiDay(now()-2*DAY_MS));
     for(const d of days)if(now()-d.last>QUIET_MS||dayStart(d.day)+DAY_MS<=now()){try{await distill(r.chat_id,d.day)}catch(e){store.run('UPDATE lark_classrooms SET last_error=? WHERE chat_id=?',String(e.message).slice(0,300),r.chat_id)}}
     if(store.get("SELECT 1 FROM lark_classroom_sources WHERE chat_id=? AND status='pending'",r.chat_id)){try{await ingest(r.chat_id,{limit:10})}catch{/* retried next tick */}}
     await draft(r.chat_id);
+    }
     if(!r.members_synced||now()-Date.parse(r.members_synced)>300000){try{await syncMembers(r.chat_id)}catch(e){store.run("UPDATE lark_classrooms SET last_error=?,manager_open_ids='[]' WHERE chat_id=?",String(e.code||e.message).slice(0,300),r.chat_id)}}
    }
   }finally{busy=false}
@@ -250,6 +260,7 @@ export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=
  function sources(chat){return store.all('SELECT ref,kind,name,status,error,updated FROM lark_classroom_sources WHERE chat_id=? ORDER BY created DESC LIMIT 200',chat)}
  function roster(chat){return store.all("SELECT member_id open_id,name FROM lark_classroom_members WHERE chat_id=? AND id_type='open_id' ORDER BY name",chat)}
  async function bind(chat,{courseId,collect,autoDraft,cards,name}){
+  requireCollection();
   if(!/^oc_[A-Za-z0-9_-]{4,80}$/.test(String(chat)))throw Object.assign(Error('Valid chat ID required'),{status:400});
   if(courseId&&!store.get('SELECT id FROM courses WHERE id=?',courseId))throw Object.assign(Error('Course not found'),{status:404});
   discover(chat,name||'');const r=row(chat);
@@ -261,20 +272,22 @@ export function larkClassroom(store,{lib,preparation,generateDraft,origin,brief=
   if(courseId&&autoPrepare&&(r.course_id!==courseId||!r.history_scanned))startPrepare(chat);
   return row(chat);
  }
- async function chats(){const remote=await larkClient().listChats();for(const c of remote)discover(c.id,c.name,c.external);for(const r of store.all("SELECT chat_id FROM lark_classrooms WHERE status='active' AND course_id IS NOT NULL")){try{await syncMembers(r.chat_id)}catch(e){store.run('UPDATE lark_classrooms SET last_error=? WHERE chat_id=?',String(e.code||e.message).slice(0,300),r.chat_id)}}return list()}
+ async function chats(){if(!collectionOwner()){const remote=await larkClient().listChats();for(const c of remote)discover(c.id,c.name,c.external);}for(const r of store.all("SELECT chat_id FROM lark_classrooms WHERE status='active' AND course_id IS NOT NULL")){try{await syncMembers(r.chat_id)}catch(e){store.run('UPDATE lark_classrooms SET last_error=? WHERE chat_id=?',String(e.code||e.message).slice(0,300),r.chat_id)}}return list()}
 
  // Long connection: one per classroom app, opened when credentials exist and reopened when they change.
  let socket=null,socketKey='',socketState={state:sdk?'idle':'unavailable'};
  function disconnect(){if(socket){socket.close();socket=null}socketKey='';socketState={state:sdk?'idle':'unavailable'}}
  function connect(){
+  if(collectionOwner()){disconnect();socketState={state:"external"};return socketState;}
   if(!sdk||!lib.startLongConnection)return socketState;
   const c=larkSettings(store),key=c.appId&&c.appSecret?[larkDomain(c),c.appId,c.appSecret].join('\u0000'):'';
   if(key&&key===socketKey&&socket)return socketState;
   disconnect();if(!key)return socketState;
   socketKey=key;socketState={state:'connecting',since:store.now()};
-  try{socket=lib.startLongConnection({sdk,domain:larkDomain(c),appId:c.appId,appSecret:c.appSecret,handle:payload=>{if(socketState.state!=='connected')socketState={state:'connected',since:store.now()};return assistant().handle(payload)},onError:e=>{socketState={state:'error',error:String(e.code||e.message).slice(0,200),since:store.now()}}});if(socketState.state==='connecting')socketState={state:'started',since:store.now()}}
+  try{socket=lib.startLongConnection({sdk,domain:larkDomain(c),appId:c.appId,appSecret:c.appSecret,handle:payload=>{if(socketState.state!=='connected')socketState={state:'connected',since:store.now()};return handle(payload)},onError:e=>{socketState={state:'error',error:String(e.code||e.message).slice(0,200),since:store.now()}}});if(socketState.state==='connecting')socketState={state:'started',since:store.now()}}
   catch(e){socket=null;socketKey='';socketState={state:'error',error:String(e.code||e.message).slice(0,200),since:store.now()}}
   return socketState;
  }
- return {assistant,handle:payload=>assistant().handle(payload),distill,draft,tick,list,roster,bind,chats,syncMembers,allows,admins,owners,connect,disconnect,connection:()=>socketState,scanHistory,ingest,prepare,startPrepare,sources};
+ const handle=payload=>collectionOwner()?Promise.resolve({state:"external"}):assistant().handle(payload);
+ return {assistant,handle,distill,draft,tick,list,roster,bind,chats,syncMembers,allows,admins,owners,connect,disconnect,connection:()=>socketState,scanHistory,ingest,prepare,startPrepare,sources};
 }
