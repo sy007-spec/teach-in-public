@@ -1,5 +1,5 @@
 import {uid,token,passwordHash,passwordValid,fail} from './security.mjs';
-const keys=['annotate','draft','publish','moderate','stats','versions'];
+const keys=['annotate','draft','publish','moderate','stats','versions','manage'];
 export function roleService(store){
  store.db.exec(`CREATE TABLE IF NOT EXISTS instructors(id TEXT PRIMARY KEY,username TEXT UNIQUE NOT NULL,name TEXT NOT NULL,password_hash TEXT NOT NULL,enabled INTEGER NOT NULL,expires TEXT NOT NULL,created TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS instructor_grants(instructor_id TEXT REFERENCES instructors(id),course_id TEXT REFERENCES courses(id),capabilities TEXT NOT NULL,expires TEXT NOT NULL,created TEXT NOT NULL,PRIMARY KEY(instructor_id,course_id));`);
