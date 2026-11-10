@@ -2,7 +2,7 @@
 // and operational metadata remain writable so a full classroom can still be read.
 export function contentStorage(store,hosting){
  if(!hosting)return {sync(){},describe:()=>null};
- const tables=['lark_group_qa','lark_question_cards','assist_kb_messages','assist_kb_cards','assist_kb_vectors','public_presentations','versions','business_materials','material_sources','image_attachments','notes','questions','ai_answers','knowledge_chunks','knowledge_approvals','knowledge_indexes','preparation_documents','materials_documents','materials_revisions','materials_assets','materials_jobs','materials_packs','annotations','discussion_context','discussion_translations','question_edits','faq','faq_revisions','backup_restore_archives'];
+ const tables=['project_deliveries','lark_group_qa','lark_question_cards','assist_kb_messages','assist_kb_cards','assist_kb_vectors','public_presentations','versions','business_materials','material_sources','image_attachments','notes','questions','ai_answers','knowledge_chunks','knowledge_approvals','knowledge_indexes','preparation_documents','materials_documents','materials_revisions','materials_assets','materials_jobs','materials_packs','annotations','discussion_context','discussion_translations','question_edits','faq','faq_revisions','backup_restore_archives'];
  store.db.exec('PRAGMA recursive_triggers=ON; CREATE TABLE IF NOT EXISTS content_storage(id INTEGER PRIMARY KEY CHECK(id=1),used INTEGER NOT NULL,cap INTEGER NOT NULL);');
  store.transaction(()=>{
  const fresh=!store.get('SELECT id FROM content_storage WHERE id=1');
