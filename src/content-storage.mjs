@@ -15,6 +15,6 @@ export function contentStorage(store,hosting){
  for(const [event,delta]of [['INSERT',bytes('NEW.')],['UPDATE','('+bytes('NEW.')+')-('+bytes('OLD.')+')'],['DELETE','-('+bytes('OLD.')+')']])store.db.exec('CREATE TRIGGER IF NOT EXISTS storage_'+table+'_'+event+' AFTER '+event+' ON '+table+' BEGIN SELECT CASE WHEN ('+delta+')>0 AND (SELECT used+('+delta+')>cap FROM content_storage WHERE id=1) THEN RAISE(ABORT,\'classroom_storage_full\') END; UPDATE content_storage SET used=used+('+delta+') WHERE id=1; END;');
  }
  });
- function sync(){const cap=hosting.status().tier==='advanced'?500000000:100000000;store.run('UPDATE content_storage SET cap=? WHERE id=1 AND cap<>?',cap,cap)}
+ function sync(){const state=hosting.status(),plan=state.tier==='advanced'?500000000:100000000,cap=Number.isSafeInteger(state.storageBytes)&&state.storageBytes>=0?Math.min(plan,state.storageBytes):plan;store.run('UPDATE content_storage SET cap=? WHERE id=1 AND cap<>?',cap,cap)}
  sync();return {sync,describe:()=>store.get('SELECT used,cap FROM content_storage WHERE id=1')};
 }

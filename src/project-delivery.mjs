@@ -50,7 +50,7 @@ export function projectDelivery(store,{createCourse,importDraft,canDraft,beforeR
   });
  }
  function courseFor(id){const row=receipt(id),course=store.get('SELECT * FROM courses WHERE id=? AND enabled=1',row.course_id);if(!course)fail(404,'Course unavailable');return course;}
- function inspect(id,session){const course=courseFor(id);if(!canDraft(session,course))fail(403,'Course author permission required');return {...receipt(id),markdown:store.get('SELECT markdown FROM project_deliveries WHERE id=?',id).markdown};}
+ function inspect(id,session){const course=courseFor(id);if(!canDraft(session,course))fail(403,'Course author permission required');return {...receipt(id),title:JSON.parse(course.title),markdown:store.get('SELECT markdown FROM project_deliveries WHERE id=?',id).markdown};}
  function accept(id,session,editedMarkdown){return store.transaction(()=>{
   const course=courseFor(id);if(!canDraft(session,course))fail(403,'Course author permission required');
   const candidate=store.get('SELECT * FROM project_deliveries WHERE id=?',id);
