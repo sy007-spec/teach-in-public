@@ -1,3 +1,4 @@
+import {modelRequestBody} from './model-policy.mjs';
 // Course materials (课程资料): when the hosting platform injects the shared materials engine (the same 空间资料 as coworker),
 // it replaces the older preparation documents. Each course is one library; drafts autosave, a published revision is what
 // draft generation, key descriptions, the Lark classroom and AI-tutor approvals use. Uploaded originals (Word/PDF/PPT/Excel…)
@@ -24,7 +25,7 @@ export function courseMaterials(store,{lib,hosting,quota,fetcher=fetch,modelPool
   const started=Date.now();let usage,state='failed';try{
   const cfg=modelConfig();if(!cfg)return null;let c=cfg.c,reserved=0,period;
   if(cfg.global){c=await hosting.globalModel();reserved=Buffer.byteLength(system+(typeof user==='string'?user:JSON.stringify(user)))+maxTokens;period=quota.describe().month;store.transaction(()=>quota.consume('aiTokens',reserved))}
-  const r=cfg.pooled?await modelPool.request([{role:'system',content:system},{role:'user',content:user}],{maxTokens,signal:AbortSignal.timeout(180000)}):await fetcher(c.baseURL.replace(/\/$/,'')+'/chat/completions',{method:'POST',redirect:'error',signal:AbortSignal.timeout(180000),headers:{authorization:'Bearer '+c.key,'content-type':'application/json'},body:JSON.stringify({...(c.extraBody||{}),model:c.model,max_tokens:maxTokens,messages:[{role:'system',content:system},{role:'user',content:user}]})});
+  const r=cfg.pooled?await modelPool.request([{role:'system',content:system},{role:'user',content:user}],{maxTokens,signal:AbortSignal.timeout(180000)}):await fetcher(c.baseURL.replace(/\/$/,'')+'/chat/completions',{method:'POST',redirect:'error',signal:AbortSignal.timeout(180000),headers:{authorization:'Bearer '+c.key,'content-type':'application/json'},body:modelRequestBody({...(c.extraBody||{}),model:c.model,max_tokens:maxTokens,messages:[{role:'system',content:system},{role:'user',content:user}]})});
   if(!r.ok)throw Error('模型暂不可用 / Model temporarily unavailable');
   const result=await r.json();usage=result.usage;if(cfg.global)quota.settle(reserved,result.usage?.total_tokens,period);if(result.choices?.[0]?.finish_reason==='length')throw Error('模型输出被截断，请拆分资料 / Model output truncated');state='success';
   return String(result.choices?.[0]?.message?.content||'')||null;

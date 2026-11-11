@@ -1,3 +1,4 @@
+import {modelRequestBody} from './model-policy.mjs';
 import {digest,fail} from './security.mjs';
 import {customModelHealth} from './custom-model-health.mjs';
 import {diagnostics} from './model-diagnostics.mjs';
@@ -28,7 +29,7 @@ export function discussionTranslation(store,{modelPool,hosting,quota,fetcher=fet
    }}
    if(!valid())fail(409,'Discussion changed; reload before translating');
    const controller=new AbortController();timer=setTimeout(()=>controller.abort(),60000);dispatched=true;
-   const response=pooled?await modelPool.request(messages,{maxTokens:5000,signal:controller.signal}):await fetcher(connection.baseURL.replace(/\/$/,'')+'/chat/completions',{method:'POST',redirect:'error',signal:controller.signal,headers:{authorization:'Bearer '+connection.key,'content-type':'application/json'},body:JSON.stringify({...(connection.extraBody||{}),model:connection.model,max_tokens:5000,response_format:{type:'json_object'},messages})});
+   const response=pooled?await modelPool.request(messages,{maxTokens:5000,signal:controller.signal}):await fetcher(connection.baseURL.replace(/\/$/,'')+'/chat/completions',{method:'POST',redirect:'error',signal:controller.signal,headers:{authorization:'Bearer '+connection.key,'content-type':'application/json'},body:modelRequestBody({...(connection.extraBody||{}),model:connection.model,max_tokens:5000,response_format:{type:'json_object'},messages})});
    received=true;if(!global&&!pooled)health.record(response.status);
    if(!response.ok)fail(502,'Translation unavailable; original message is unchanged');
    const reader=response.body.getReader();let size=0;const parts=[];

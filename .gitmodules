@@ -1,0 +1,3 @@
+[submodule "rules/improves"]
+	path = rules/improves
+	url = https://github.com/sy007-spec/IMPROVES-aiprompt.git
