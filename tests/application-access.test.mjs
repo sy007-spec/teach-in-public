@@ -1,0 +1,26 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {applicationAccess,freshMfa} from '../src/application-access.mjs';
+test('STS requires fresh bound MFA, exact resource, scopes and live revocation',()=>{
+ const db=new DatabaseSync(':memory:');let now=1_800_000_000_000,enabled=true;
+ const identity={issuer:'https://identity.example',subject:'owner',authTime:now/1000,amr:['pwd','otp']};
+ const access=applicationAccess(db,{resource:'https://course.example/api/content',scopes:['content:read'],clock:()=>now,eligible:(owner,i)=>enabled&&owner==='local-owner'&&i.subject==='owner'});
+ const {id,key}=access.create('local-owner',{name:'Book connector'});
+ const input={hours:720,scopes:['content:read'],resources:['course-a/v1'],usage:{persistentDisplay:true}};
+ assert.throws(()=>access.approve(id,'local-owner',{...identity,amr:['pwd']},input),/MFA/);
+ assert.throws(()=>access.approve(id,'local-owner',{...identity,subject:'different'},input),/MFA/);
+ access.approve(id,'local-owner',identity,input);
+ assert.throws(()=>access.exchange(key,{resource:'https://other.example',scopes:['content:read']}),/Resource/);
+ const token=access.exchange(key,{resource:'https://course.example/api/content',scopes:['content:read']});
+ assert.equal(token.expires_in,600);
+ assert.equal(access.verify(token.access_token,'content:read','course-a/v1').owner,'local-owner');
+ assert.throws(()=>access.verify(key,'content:read','course-a/v1'),/Token/);
+ assert.throws(()=>access.verify(token.access_token,'content:read','course-b/v1'),/granted/);
+ enabled=false;assert.throws(()=>access.verify(token.access_token,'content:read'),/permission/);enabled=true;
+ access.revoke(id,'local-owner');assert.throws(()=>access.verify(token.access_token,'content:read'),/Grant/);
+ access.approve(id,'local-owner',identity,input);
+ const next=access.exchange(key,{resource:'https://course.example/api/content',scopes:['content:read']});
+ now+=600001;assert.throws(()=>access.verify(next.access_token,'content:read'),/Token/);
+ assert.equal(freshMfa({...identity,amr:['otp']},now),false);db.close();
+});

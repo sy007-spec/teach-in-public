@@ -1,5 +1,7 @@
 # TeachInPublic
 
+课程内容的统一账户 MFA 与短期凭证接入见 [课程 API 授权](CONTENT_ACCESS_SPEC.md)。连接授权与独立书籍成果使用授权分开管理；部署方须配置可信统一身份后方可批准接入。
+
 Open-source online PPT, with course access under your control.
 
 MIT-licensed, self-hosted software for bilingual teaching, course access approval, discussions, notes and time-limited reading links. Optional [managed hosting](https://training.seii.top/) is a separate service; self-hosted installations have no hosting subscription requirement. Dependencies retain their own licenses.
