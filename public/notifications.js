@@ -5,7 +5,7 @@ const active=new Map();
 const t=(zh,en)=>document.documentElement.lang.startsWith('zh')?zh:en;
 function read(){try{preferences=JSON.parse(localStorage.getItem('teaching.notifications.'+scope)||'{}')}catch{preferences={}}if(!preferences||typeof preferences!=='object')preferences={};if(!positions.includes(preferences.position))preferences.position='top-center';if(![3,5,8,12].includes(preferences.seconds))preferences.seconds=5;}
 read();
-const css=document.createElement('link');css.rel='stylesheet';css.href='/notifications.css';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href=new URL('./notifications.css',import.meta.url).href;document.head.append(css);
 function host(){if(!stack){stack=document.createElement('div');stack.className='notice-stack';stack.setAttribute('aria-label',t('操作通知','Notifications'));}const parent=document.fullscreenElement||[...document.querySelectorAll('dialog[open]')].pop()||document.body;if(stack.parentNode!==parent)parent.append(stack);stack.dataset.position=preferences.position;return stack;}
 // Dialogs use the top layer; keep notifications visible there, including after close.
 new MutationObserver(()=>{if(active.size)host()}).observe(document.documentElement,{subtree:true,attributes:true,attributeFilter:['open'],childList:true});
