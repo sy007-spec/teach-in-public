@@ -7,6 +7,7 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
  const db=store.db,resource=origin+'/api/content/v1';
  if(!store.setting('contentInstanceId'))store.set('contentInstanceId',randomUUID());
  const instanceId=store.setting('contentInstanceId');
+ db.exec('CREATE TABLE IF NOT EXISTS content_notices(resource TEXT PRIMARY KEY,status TEXT NOT NULL,reason TEXT NOT NULL,replacement TEXT,updated TEXT NOT NULL)');
  db.exec('CREATE TABLE IF NOT EXISTS content_identity_bindings(owner TEXT PRIMARY KEY,issuer TEXT,subject TEXT); CREATE TABLE IF NOT EXISTS content_oidc_flows(id TEXT PRIMARY KEY,owner TEXT,session TEXT,data TEXT,expires INTEGER); CREATE TABLE IF NOT EXISTS content_mfa_proofs(session TEXT PRIMARY KEY,owner TEXT,data TEXT,expires INTEGER);');
  const bound=(owner,i)=>{const b=store.get('SELECT * FROM content_identity_bindings WHERE owner=?',owner);return b?.issuer===i.issuer&&b?.subject===i.subject&&!!store.get('SELECT id FROM sessions WHERE user_id=? AND admin=1 AND expires>? LIMIT 1',owner,store.now());};
  const apps=applicationAccess(db,{resource,scopes:['content:read'],eligible:bound});
@@ -45,7 +46,14 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
     if(req.method!=='GET')fail(405,'只读接口');
     const object=p.endsWith('/revision')?u.searchParams.get('course')+'/'+u.searchParams.get('version'):undefined;
     const grant=apps.verify(String(req.headers.authorization||'').replace(/^Bearer /,''),'content:read',object);
-    if(p.endsWith('/catalog')){const items=catalog(grant);return json(res,200,{items,etag:hash(JSON.stringify(items)),usage:grant.usage});}
+    if(p.endsWith('/catalog')){
+     const items=catalog(grant),notices=store.all('SELECT * FROM content_notices ORDER BY resource').filter(x=>grant.resources.includes(x.resource));
+     const etag=hash(JSON.stringify({items,notices,usage:grant.usage}));
+     if(u.searchParams.get('snapshot')&&u.searchParams.get('snapshot')!==etag)fail(409,'snapshot_expired');
+     const offset=Number(u.searchParams.get('cursor')||0),limit=Math.min(200,Number(u.searchParams.get('limit')||200));
+     if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1)fail(422,'目录游标无效');
+     return json(res,200,{items:items.slice(offset,offset+limit),next:offset+limit<items.length?String(offset+limit):null,etag,notices,usage:grant.usage});
+    }
     if(p.endsWith('/revision')){const result=content(grant,u.searchParams.get('course'),u.searchParams.get('version'),u.searchParams.get('revision'));apps.verify(String(req.headers.authorization||'').replace(/^Bearer /,''),'content:read',object);return json(res,200,result);}
     fail(404,'接口不存在');
    }
@@ -53,6 +61,13 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
    if(req.method!=='GET'&&(req.headers.origin!==origin||req.headers['x-csrf-token']!==s.csrf))fail(403,'管理会话校验失败');
    if(p==='/api/content-access/apps'&&req.method==='GET')return json(res,200,{apps:apps.list(s.user_id),courses:store.all('SELECT * FROM courses WHERE enabled=1').flatMap(c=>business.list(c,true).filter(v=>v.published>0).map(v=>({resource:c.id+'/'+v.id,title:JSON.parse(c.title),revision:v.published}))),configured:!!config.issuer});
    if(p==='/api/content-access/apps'&&req.method==='POST')return json(res,201,apps.create(s.user_id,await read(req)));
+   if(p==='/api/content-access/notices'&&req.method==='GET')return json(res,200,store.all('SELECT * FROM content_notices ORDER BY resource'));
+   if(p==='/api/content-access/notices'&&req.method==='POST'){
+    const input=await read(req),parts=String(input.resource||'').split('/'),course=store.get('SELECT * FROM courses WHERE id=?',parts[0]);
+    if(parts.length!==2||!course||!business.list(course,true).some(v=>v.id===parts[1]))fail(404,'课程版本不存在');
+    if(!['active','withdrawn','stopped'].includes(input.status)||typeof input.reason!=='string'||!input.reason.trim()||input.reason.length>3000)fail(422,'请说明状态和原因');
+    store.run('INSERT OR REPLACE INTO content_notices VALUES(?,?,?,?,?)',input.resource,input.status,input.reason,String(input.replacement||'').slice(0,300),new Date().toISOString());return json(res,200,{ok:true});
+   }
    if(p==='/api/content-access/start'&&req.method==='POST'){
     const d=await metadata(),state=token(),verifier=token(),nonce=token();
     store.run('DELETE FROM content_oidc_flows WHERE expires<?',Date.now());

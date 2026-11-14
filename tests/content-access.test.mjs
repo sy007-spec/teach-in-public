@@ -42,6 +42,11 @@ test('course API requires explicit MFA approval, isolates versions and strips in
   const content=await request('/api/content/v1/revision?course=course&version=v1&revision=1',null,access);
   assert.equal(content.status,200);assert(!content.data.content.text.includes('私有讲师备注'));assert(content.data.usage.receiptId);
   assert.equal((await request('/api/content/v1/revision?course=other&version=v1&revision=1',null,access)).status,403);
+  assert.equal((await request('/api/content-access/notices',{resource:'other/v1',status:'withdrawn',reason:'纠错'})).status,404);
+  assert.equal((await request('/api/content-access/notices',{resource:'course/v1',status:'withdrawn',reason:'虚构纠错通知'})).status,200);
+  const changed=await request('/api/content/v1/catalog',null,access);assert.notEqual(changed.data.etag,catalog.data.etag);assert.equal(changed.data.notices[0].status,'withdrawn');
+  assert.equal((await request('/api/content/v1/catalog?snapshot='+catalog.data.etag,null,access)).status,409);
+  assert.equal((await request('/api/content/v1/catalog?cursor=-1',null,access)).status,422);
   await request('/api/content-access/revoke',{application:app.id});
   assert.equal((await request('/api/content/v1/catalog',null,access)).status,401);
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));store.db.close();rmSync(dir,{recursive:true,force:true});}

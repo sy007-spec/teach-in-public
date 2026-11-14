@@ -10,6 +10,8 @@
 
 接口：/api/content-access/metadata、token、apps、start、callback、approve、revoke；内容目录 /api/content/v1/catalog；精确修订 /api/content/v1/revision?course=ID&version=VERSION&revision=REVISION。目录返回当前发布清单和etag；实例UUID在本机配置中持久保存，不随域名变化重新生成。
 
-当前同步协议为完整获准目录+etag核对，尚无增量游标和主动撤回事件；消费方必须定期核对，不得声称已达到事件实时同步。正文接口复核当前修订，源更新返回409。必要附件资源接口尚待独立实现，不以临时外链承诺独立成果。
+当前同步协议为获准目录的固定etag分页（limit≤200、cursor、snapshot）与周期核对；快照变化返回409 snapshot_expired。管理员可在同一授权页通过notices记录撤回、停止维护、替代建议或恢复，目录返回获准范围内的明确通知，列表缺项不代表撤回。尚无增量变更事件或主动推送；消费方必须定期核对，不得声称已达到事件实时同步。正文接口复核当前修订，源更新返回409。必要附件资源接口尚待独立实现，不以临时外链承诺独立成果。
 
 验证：application-access.test.mjs、content-access.test.mjs覆盖MFA、授权范围、令牌/Key区分、撤销、版本和讲师信息排除；content-access-browser.cjs覆盖登录、创建/撤销、身份配置缺失及桌面/窄屏。测试数据虚构。生产MFA、实际课程接入及部署需另行验收。
+
+身份应用注册工具：ops/register-content-identity.py，使用运维已有的IdP管理权限注册专用PKCE客户端，仅输出回调和项目标识，不授予课程访问权。运行配置仍在私有目录。
