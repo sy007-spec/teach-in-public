@@ -47,6 +47,15 @@ test('course API requires explicit MFA approval, isolates versions and strips in
   const changed=await request('/api/content/v1/catalog',null,access);assert.notEqual(changed.data.etag,catalog.data.etag);assert.equal(changed.data.notices[0].status,'withdrawn');
   assert.equal((await request('/api/content/v1/catalog?snapshot='+catalog.data.etag,null,access)).status,409);
   assert.equal((await request('/api/content/v1/catalog?cursor=-1',null,access)).status,422);
+  store.run('UPDATE sessions SET expires=? WHERE id=?','2000-01-01T00:00:00Z',s.id);
+  assert.equal((await request('/api/content/v1/catalog',null,access)).status,200,'Browser expiry is not application revocation');
+  const originalAdmin=store.setting('adminHash');store.set('adminHash','synthetic-new-admin-generation');
+  assert.equal((await request('/api/content/v1/catalog',null,access)).status,401,'Admin credential replacement invalidates existing app authorization');
+  store.set('adminHash',originalAdmin);
+  store.db.exec('CREATE TABLE IF NOT EXISTS user_admins(user_id TEXT PRIMARY KEY,actor TEXT,created TEXT)');store.run('INSERT INTO user_admins VALUES(?,?,?)','owner','fixture',now);store.run("UPDATE content_identity_bindings SET admin_kind='delegated' WHERE owner=?",'owner');
+  assert.equal((await request('/api/content/v1/catalog',null,access)).status,200);
+  store.run('DELETE FROM user_admins WHERE user_id=?','owner');assert.equal((await request('/api/content/v1/catalog',null,access)).status,401,'Delegated administrator removal revokes access without waiting for browser expiry');
+  store.run("UPDATE content_identity_bindings SET admin_kind='root' WHERE owner=?",'owner');
   await request('/api/content-access/revoke',{application:app.id});
   assert.equal((await request('/api/content/v1/catalog',null,access)).status,401);
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));store.db.close();rmSync(dir,{recursive:true,force:true});}

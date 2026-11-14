@@ -2,7 +2,7 @@
 
 实现入口：管理后台 → 智能与集成 → 课程 API 授权。部署启用前配置私有运行目录中的 content-identity.json，字段 issuer、clientId，以及供应商需要时的 clientSecret；不得写入Git。IdP回调为课堂同源 /api/content-access/callback。
 
-管理员先创建应用，仅一次返回应用Key。随后从管理会话发起统一账户登录，校验授权码+PKCE、state、nonce、签名、issuer、audience、azp、auth_time及amr；最近十分钟可信MFA才可在页面明确批准。首次批准绑定本地管理身份与统一issuer/subject，后续不能换成另一统一账户。回调本身不批准应用。有效管理员会话和绑定仍在线检查；本地管理身份会话全部失效后接入会停止，需管理员重新登录，不能把30天授予期限理解为绕过本地权限撤销。
+管理员先创建应用，仅一次返回应用Key。随后从管理会话发起统一账户登录，校验授权码+PKCE、state、nonce、签名、issuer、audience、azp、auth_time及amr；最近十分钟可信MFA才可在页面明确批准。首次批准绑定本地管理身份与统一issuer/subject，后续不能换成另一统一账户。回调本身不批准应用。授予操作仍要求有效课堂管理员会话及近期MFA；已经批准的应用按独立期限持续工作，浏览器退出或会话到期不撤销应用。每次交换/请求仍检查统一身份绑定、用户存在、授权版本与期限，以及绑定时的管理员凭据代次；管理员密码凭据变更会使既有绑定失效，须重新验证并批准。升级时仅迁移当时仍满足旧有效管理员会话条件的绑定，不能使已经失效的旧接入自动复活。
 
 作用域当前只有content:read，逐项选择courseId/businessVersion。授权1至720小时；Key只向同源 /api/content-access/token交换最长十分钟访问令牌，不直接读内容。访问令牌绑定resource、应用、scope、资源和授权版本；撤销立即拒绝旧令牌。连接撤销与已发布成果使用权分离。
 
@@ -15,3 +15,5 @@
 验证：application-access.test.mjs、content-access.test.mjs覆盖MFA、授权范围、令牌/Key区分、撤销、版本和讲师信息排除；content-access-browser.cjs覆盖登录、创建/撤销、身份配置缺失及桌面/窄屏。测试数据虚构。生产MFA、实际课程接入及部署需另行验收。
 
 身份应用注册工具：ops/register-content-identity.py，使用运维已有的IdP管理权限注册专用PKCE客户端，仅输出回调和项目标识，不授予课程访问权。运行配置仍在私有目录。
+
+委派管理员另检查user_admins中的当前授权，撤销委派立即拒绝既有应用访问；根管理身份与委派身份分别记录，不用已过期的浏览器会话充当持久角色。测试覆盖浏览器到期仍可访问、管理员凭据变更失效、委派撤销失效及显式应用撤销。

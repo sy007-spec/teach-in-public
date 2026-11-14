@@ -9,7 +9,13 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
  const instanceId=store.setting('contentInstanceId');
  db.exec('CREATE TABLE IF NOT EXISTS content_notices(resource TEXT PRIMARY KEY,status TEXT NOT NULL,reason TEXT NOT NULL,replacement TEXT,updated TEXT NOT NULL)');
  db.exec('CREATE TABLE IF NOT EXISTS content_identity_bindings(owner TEXT PRIMARY KEY,issuer TEXT,subject TEXT); CREATE TABLE IF NOT EXISTS content_oidc_flows(id TEXT PRIMARY KEY,owner TEXT,session TEXT,data TEXT,expires INTEGER); CREATE TABLE IF NOT EXISTS content_mfa_proofs(session TEXT PRIMARY KEY,owner TEXT,data TEXT,expires INTEGER);');
- const bound=(owner,i)=>{const b=store.get('SELECT * FROM content_identity_bindings WHERE owner=?',owner);return b?.issuer===i.issuer&&b?.subject===i.subject&&!!store.get('SELECT id FROM sessions WHERE user_id=? AND admin=1 AND expires>? LIMIT 1',owner,store.now());};
+ if(!store.all('PRAGMA table_info(content_identity_bindings)').some(c=>c.name==='admin_generation'))db.exec('ALTER TABLE content_identity_bindings ADD COLUMN admin_generation TEXT');
+ if(!store.all('PRAGMA table_info(content_identity_bindings)').some(c=>c.name==='admin_kind'))db.exec('ALTER TABLE content_identity_bindings ADD COLUMN admin_kind TEXT');
+ const generation=()=>hash(JSON.stringify(store.setting('adminHash')));
+ // Migrate only bindings that would pass the previous eligibility rule now.
+ // Expired browser sessions must not interrupt an already approved grant later.
+ store.run("UPDATE content_identity_bindings SET admin_generation=?,admin_kind='root' WHERE (admin_generation IS NULL OR admin_kind IS NULL) AND owner IN (SELECT user_id FROM sessions WHERE admin=1 AND expires>?)",generation(),store.now());
+ const bound=(owner,i)=>{const b=store.get('SELECT * FROM content_identity_bindings WHERE owner=?',owner);return i.issuer===config.issuer&&b?.issuer===i.issuer&&b?.subject===i.subject&&b.admin_generation===generation()&&!!store.get('SELECT id FROM users WHERE id=?',owner)&&(b.admin_kind==='root'||b.admin_kind==='delegated'&&!!store.get('SELECT user_id FROM user_admins WHERE user_id=?',owner));};
  const apps=applicationAccess(db,{resource,scopes:['content:read'],eligible:bound});
  let discovery,key=keySet;
  async function metadata(){
@@ -100,7 +106,8 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
     if(!Array.isArray(input.resources)||input.resources.some(x=>!allowed.has(x)))fail(403,'包含不可开放课程');
     if(input.usage?.persistentDisplay!==true||input.usage?.retain!==true||input.usage?.compile!==true||!['members','authenticated'].includes(input.usage?.audience?.mode)||!Array.isArray(input.usage?.audience?.subjects))fail(422,'须明确持续成果使用授权及读者范围');
     const outcome=store.transaction(()=>{
-     store.run('INSERT OR IGNORE INTO content_identity_bindings VALUES(?,?,?)',s.user_id,identity.issuer,identity.subject);
+     const kind=store.get('SELECT admin FROM sessions WHERE id=?',s.id)?.admin?'root':store.get('SELECT user_id FROM user_admins WHERE user_id=?',s.user_id)?'delegated':null;if(!kind)fail(403,'课堂管理权限已撤销');
+     store.run('INSERT INTO content_identity_bindings(owner,issuer,subject,admin_generation,admin_kind) VALUES(?,?,?,?,?) ON CONFLICT(owner) DO UPDATE SET admin_generation=excluded.admin_generation,admin_kind=excluded.admin_kind WHERE issuer=excluded.issuer AND subject=excluded.subject',s.user_id,identity.issuer,identity.subject,generation(),kind);
      return apps.approve(input.application,s.user_id,identity,{...input,scopes:['content:read'],usage:{...input.usage,receiptId:randomUUID(),grantedBy:{issuer:identity.issuer,subject:identity.subject},grantedAt:new Date().toISOString()}});
     });return json(res,200,outcome);
    }
