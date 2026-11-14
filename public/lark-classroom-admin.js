@@ -1,9 +1,13 @@
 // Administrator view: Feishu/Lark setup guide (shared web SDK) and the groups that act as classrooms.
 import {esc} from './render.js';
 
-export async function mountLarkGuide(host,{lang}){
+export async function mountLarkGuide(host,{lang,api,toast,data}){
  const {mountLarkSetup}=await import('/lark-setup.js');
- mountLarkSetup(host,{manifestUrl:'/api/admin/lark/setup',lang:lang==='zh'?'zh':'en',storageKey:'teach-lark-setup'});
+ if(!host.isConnected)return;
+ const status=value=>{const c=value.assistant?.connection;const state={connected:['已收到连接事件','Events received'],started:['连接已启动，等待事件','Connection started; awaiting events'],connecting:['正在连接','Connecting'],idle:['尚未配置连接','Connection not configured'],error:['连接失败，请检查配置与应用权限','Connection failed; check credentials and permissions'],unavailable:['当前运行环境不支持长连接','Persistent connection unavailable'],external:['由外部项目管理采集','Collection managed by external project']}[c?.state]||['尚未检查','Not checked'];return (value.botName?value.botName+' · ':'')+state[lang==='zh'?0:1]};
+ const controller=mountLarkSetup(host,{manifestUrl:'/api/admin/lark/setup',lang:lang==='zh'?'zh':'en',storageKey:'teach-lark-setup',appearance:'teach-in-public',theme:'auto',notify:toast,
+  ...(api?{onPlatformChange:async platform=>{const manifest=await api('/api/admin/lark/setup?platform='+platform);const select=document.getElementById('larkRegion');if(select)select.value=platform;return manifest},connection:{status:status(data||{}),check:async()=>({message:status(await api('/api/admin/lark'))})}}:{})});
+ await controller.ready;return controller;
 }
 
 const statusText=(s,t)=>({pending:t('待关联','Not linked'),active:t('课堂中','Active'),removed:t('机器人已移出','Bot removed')}[s]||s);
