@@ -38,8 +38,10 @@ test('course API requires explicit MFA approval, isolates versions and strips in
   const begin=(await request('/api/content-access/start',{})).data,auth=new URL(begin.url);nonce=auth.searchParams.get('nonce');
   const callback='/api/content-access/callback?code=code&state='+auth.searchParams.get('state');
   assert.equal((await request(callback)).status,303);assert.equal((await request(callback)).status,401);
+  store.run('INSERT INTO content_identity_people VALUES(?,?,?)','https://unrelated.example','other-person','Other');
+  assert.deepEqual((await request('/api/content-access/apps')).data.readers.map(p=>p.subject),['unified-owner'],'Only verified identities from this issuer are listed');
   assert.equal((await request('/api/content-access/approve',approval)).status,200);
-  for(const invalid of [{target:{origin:'http://books.example',bookId:'book-1'}},{resources:['private/v1']},{hours:721},{name:''}]){
+  for(const invalid of [{target:{origin:'http://books.example',bookId:'book-1'}},{resources:['private/v1']},{hours:721},{name:''},{usage:{...approval.usage,audience:{mode:'members',subjects:[]}}}]){
    assert((await request('/api/content-access/handoff',{...handoff,...invalid})).status>=400);
    assert.equal(service.apps.list(s.user_id).length,1,'Invalid handoff rolls back application creation');
   }

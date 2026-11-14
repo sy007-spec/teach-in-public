@@ -19,3 +19,5 @@
 委派管理员另检查user_admins中的当前授权，撤销委派立即拒绝既有应用访问；根管理身份与委派身份分别记录，不用已过期的浏览器会话充当持久角色。测试覆盖浏览器到期仍可访问、管理员凭据变更失效、委派撤销失效及显式应用撤销。
 
 复制协议：接入请求为type=seii.bibletree-request、version=1、target(origin/bookId/title)；授权包为type=seii.teaching-connection、version=1、origin/instanceId/application/key/resources/expires/target/usage。目标仅允许HTTPS站点与明确书籍，写入可信usage.destination；续期不能移除目标约束。消费者必须通过真实令牌交换和目录校验目标，不能信任剪贴板授权声明。密钥只显示本次，不进入浏览器存储；复制失败保留文本并支持重试，不再次创建。未发布课程不能分发。
+
+成果读者由可搜索用户列表勾选，每项显示姓名和完整统一账户ID，不提供手工ID输入。目录限本课堂同issuer的可信身份回调、既有绑定与项目身份；既有授权名单中尚未匹配姓名的账户明确显示为既有授权账户，避免编辑授权时静默丢失。指定账户模式禁止空名单。选择既有应用自动载入课程与读者；授权仍要求真人MFA。

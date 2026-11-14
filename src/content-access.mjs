@@ -7,6 +7,7 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
  const db=store.db,resource=origin+'/api/content/v1';
  if(!store.setting('contentInstanceId'))store.set('contentInstanceId',randomUUID());
  const instanceId=store.setting('contentInstanceId');
+ db.exec('CREATE TABLE IF NOT EXISTS content_identity_people(issuer TEXT,subject TEXT,name TEXT NOT NULL,PRIMARY KEY(issuer,subject))');
  db.exec('CREATE TABLE IF NOT EXISTS content_notices(resource TEXT PRIMARY KEY,status TEXT NOT NULL,reason TEXT NOT NULL,replacement TEXT,updated TEXT NOT NULL)');
  db.exec('CREATE TABLE IF NOT EXISTS content_identity_bindings(owner TEXT PRIMARY KEY,issuer TEXT,subject TEXT); CREATE TABLE IF NOT EXISTS content_oidc_flows(id TEXT PRIMARY KEY,owner TEXT,session TEXT,data TEXT,expires INTEGER); CREATE TABLE IF NOT EXISTS content_mfa_proofs(session TEXT PRIMARY KEY,owner TEXT,data TEXT,expires INTEGER);');
  if(!store.all('PRAGMA table_info(content_identity_bindings)').some(c=>c.name==='admin_generation'))db.exec('ALTER TABLE content_identity_bindings ADD COLUMN admin_generation TEXT');
@@ -17,6 +18,14 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
  store.run("UPDATE content_identity_bindings SET admin_generation=?,admin_kind='root' WHERE (admin_generation IS NULL OR admin_kind IS NULL) AND owner IN (SELECT user_id FROM sessions WHERE admin=1 AND expires>?)",generation(),store.now());
  const bound=(owner,i)=>{const b=store.get('SELECT * FROM content_identity_bindings WHERE owner=?',owner);return i.issuer===config.issuer&&b?.issuer===i.issuer&&b?.subject===i.subject&&b.admin_generation===generation()&&!!store.get('SELECT id FROM users WHERE id=?',owner)&&(b.admin_kind==='root'||b.admin_kind==='delegated'&&!!store.get('SELECT user_id FROM user_admins WHERE user_id=?',owner));};
  const apps=applicationAccess(db,{resource,scopes:['content:read'],eligible:bound});
+ function readers(){
+  const people=new Map();
+  const add=rows=>{for(const p of rows)if(p.subject)people.set(p.subject,{subject:p.subject,name:p.name||'已验证账户'});};
+  add(store.all('SELECT b.subject,u.name FROM content_identity_bindings b JOIN users u ON u.id=b.owner WHERE b.issuer=?',config.issuer||''));
+  if(store.get("SELECT name FROM sqlite_master WHERE type='table' AND name='project_principals'"))add(store.all('SELECT p.subject,u.name FROM project_principals p JOIN users u ON u.id=p.user_id WHERE p.issuer=?',config.issuer||''));
+  add(store.all('SELECT subject,name FROM content_identity_people WHERE issuer=?',config.issuer||''));
+  return [...people.values()].sort((a,b)=>a.name.localeCompare(b.name)||a.subject.localeCompare(b.subject));
+ }
  let discovery,key=keySet;
  async function metadata(){
   if(!config.issuer||!config.clientId)fail(503,'统一账户接入尚未配置');
@@ -65,7 +74,7 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
    }
    const s=session(req,res);if(!s.admin)fail(403,'请先登录课堂管理员');
    if(req.method!=='GET'&&(req.headers.origin!==origin||req.headers['x-csrf-token']!==s.csrf))fail(403,'管理会话校验失败');
-   if(p==='/api/content-access/apps'&&req.method==='GET')return json(res,200,{apps:apps.list(s.user_id),courses:store.all('SELECT * FROM courses WHERE enabled=1').flatMap(c=>business.list(c,true).filter(v=>v.published>0).map(v=>({resource:c.id+'/'+v.id,title:JSON.parse(c.title),revision:v.published}))),configured:!!config.issuer});
+   if(p==='/api/content-access/apps'&&req.method==='GET')return json(res,200,{apps:apps.list(s.user_id),readers:readers(),courses:store.all('SELECT * FROM courses WHERE enabled=1').flatMap(c=>business.list(c,true).filter(v=>v.published>0).map(v=>({resource:c.id+'/'+v.id,title:JSON.parse(c.title),revision:v.published}))),configured:!!config.issuer});
    if(p==='/api/content-access/apps'&&req.method==='POST')return json(res,201,apps.create(s.user_id,await read(req)));
    if(p==='/api/content-access/notices'&&req.method==='GET')return json(res,200,store.all('SELECT * FROM content_notices ORDER BY resource'));
    if(p==='/api/content-access/notices'&&req.method==='POST'){
@@ -96,6 +105,7 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
     const existing=store.get('SELECT * FROM content_identity_bindings WHERE owner=?',s.user_id);
     if(existing&&(existing.issuer!==proof.issuer||existing.subject!==proof.subject))fail(403,'统一账户与既有绑定不一致');
     store.run('INSERT OR REPLACE INTO content_mfa_proofs VALUES(?,?,?,?)',s.id,s.user_id,JSON.stringify(proof),Date.now()+600000);
+    store.run('INSERT OR REPLACE INTO content_identity_people VALUES(?,?,?)',proof.issuer,proof.subject,String(payload.name||store.get('SELECT name FROM users WHERE id=?',s.user_id)?.name||'已验证账户').slice(0,200));
     res.writeHead(303,{location:'/content-access'+(data.course?'?course='+encodeURIComponent(data.course):''),'cache-control':'no-store'});return res.end();
    }
    if(['/api/content-access/approve','/api/content-access/handoff'].includes(p)&&req.method==='POST'){
@@ -105,6 +115,8 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
     const allowed=new Set(store.all('SELECT * FROM courses WHERE enabled=1').flatMap(c=>business.list(c,true).filter(v=>v.published>0).map(v=>c.id+'/'+v.id)));
     if(!Array.isArray(input.resources)||input.resources.some(x=>!allowed.has(x)))fail(403,'包含不可开放课程');
     if(input.usage?.persistentDisplay!==true||input.usage?.retain!==true||input.usage?.compile!==true||!['members','authenticated'].includes(input.usage?.audience?.mode)||!Array.isArray(input.usage?.audience?.subjects))fail(422,'须明确持续成果使用授权及读者范围');
+    const audience=input.usage.audience;
+    if(audience.subjects.length>1000||audience.subjects.some(x=>typeof x!=='string'||!x.trim()||x.length>200)||audience.mode==='members'&&!audience.subjects.length)fail(422,'请从用户列表中至少选择一名成果读者');
     const handoff=p.endsWith('/handoff');let destination;
     if(handoff){
      try{const u=new URL(input.target?.origin);if(u.protocol!=='https:'||u.href!==u.origin+'/'||typeof input.target.bookId!=='string'||!/^[a-zA-Z0-9_-]{1,200}$/.test(input.target.bookId))throw Error();destination={origin:u.origin,bookId:input.target.bookId};}catch{fail(422,'请粘贴有效的BibleTree书籍接入请求');}
