@@ -32,10 +32,26 @@ test('course API requires explicit MFA approval, isolates versions and strips in
   const app=(await request('/api/content-access/apps',{name:'虚构接入',target:'book'})).data;
   const approval={application:app.id,hours:720,resources:['course/v1'],usage:{retain:true,compile:true,persistentDisplay:true,audience:{mode:'members',subjects:['unified-owner']}}};
   assert.equal((await request('/api/content-access/approve',approval)).status,403);
+  const handoff={...approval,name:'BibleTree测试',target:{origin:'https://books.example',bookId:'book-1'}};
+  assert.equal((await request('/api/content-access/handoff',handoff)).status,403);
+  assert.equal(service.apps.list(s.user_id).length,1,'No app is created before MFA');
   const begin=(await request('/api/content-access/start',{})).data,auth=new URL(begin.url);nonce=auth.searchParams.get('nonce');
   const callback='/api/content-access/callback?code=code&state='+auth.searchParams.get('state');
   assert.equal((await request(callback)).status,303);assert.equal((await request(callback)).status,401);
   assert.equal((await request('/api/content-access/approve',approval)).status,200);
+  for(const invalid of [{target:{origin:'http://books.example',bookId:'book-1'}},{resources:['private/v1']},{hours:721},{name:''}]){
+   assert((await request('/api/content-access/handoff',{...handoff,...invalid})).status>=400);
+   assert.equal(service.apps.list(s.user_id).length,1,'Invalid handoff rolls back application creation');
+  }
+  const distributed=await request('/api/content-access/handoff',handoff);assert.equal(distributed.status,200);
+  const bundle=distributed.data;assert.equal(bundle.type,'seii.teaching-connection');assert.deepEqual(bundle.target,handoff.target);assert.deepEqual(bundle.resources,['course/v1']);
+  assert(!JSON.stringify((await request('/api/content-access/apps')).data).includes(bundle.key),'Lists never expose keys');
+  const issuedAccess=(await request('/api/content-access/token',{resource:origin+'/api/content/v1',scopes:['content:read']},bundle.key)).data.access_token;
+  assert.deepEqual((await request('/api/content/v1/catalog',null,issuedAccess)).data.usage.destination,handoff.target);
+  assert.equal((await request('/api/content-access/approve',{...approval,application:bundle.application})).status,200);
+  assert.deepEqual(service.apps.grantInfo(bundle.application).usage.destination,handoff.target,'Renewal retains destination');
+  await request('/api/content-access/revoke',{application:bundle.application,key:true});
+  assert.equal((await request('/api/content-access/token',{resource:origin+'/api/content/v1',scopes:['content:read']},bundle.key)).status,401);
   const access=(await request('/api/content-access/token',{resource:origin+'/api/content/v1',scopes:['content:read']},app.key)).data.access_token;
   assert.equal((await request('/api/content/v1/catalog',null,app.key)).status,401);
   const catalog=await request('/api/content/v1/catalog',null,access);assert.equal(catalog.data.items.length,1);

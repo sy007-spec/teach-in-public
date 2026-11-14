@@ -75,9 +75,9 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
     store.run('INSERT OR REPLACE INTO content_notices VALUES(?,?,?,?,?)',input.resource,input.status,input.reason,String(input.replacement||'').slice(0,300),new Date().toISOString());return json(res,200,{ok:true});
    }
    if(p==='/api/content-access/start'&&req.method==='POST'){
-    const d=await metadata(),state=token(),verifier=token(),nonce=token();
+    const input=await read(req),course=typeof input.course==='string'?input.course.slice(0,200):'',d=await metadata(),state=token(),verifier=token(),nonce=token();
     store.run('DELETE FROM content_oidc_flows WHERE expires<?',Date.now());
-    store.run('INSERT INTO content_oidc_flows VALUES(?,?,?,?,?)',hash(state),s.user_id,s.id,JSON.stringify({verifier,nonce}),Date.now()+600000);
+    store.run('INSERT INTO content_oidc_flows VALUES(?,?,?,?,?)',hash(state),s.user_id,s.id,JSON.stringify({verifier,nonce,course}),Date.now()+600000);
     const target=new URL(d.authorization_endpoint);
     for(const [k,v]of Object.entries({client_id:config.clientId,redirect_uri:origin+'/api/content-access/callback',response_type:'code',scope:'openid profile',state,nonce,code_challenge:hashBase64(verifier),code_challenge_method:'S256',prompt:'login',max_age:'0'}))target.searchParams.set(k,v);
     return json(res,200,{url:target.href});
@@ -96,19 +96,25 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
     const existing=store.get('SELECT * FROM content_identity_bindings WHERE owner=?',s.user_id);
     if(existing&&(existing.issuer!==proof.issuer||existing.subject!==proof.subject))fail(403,'统一账户与既有绑定不一致');
     store.run('INSERT OR REPLACE INTO content_mfa_proofs VALUES(?,?,?,?)',s.id,s.user_id,JSON.stringify(proof),Date.now()+600000);
-    res.writeHead(303,{location:'/content-access','cache-control':'no-store'});return res.end();
+    res.writeHead(303,{location:'/content-access'+(data.course?'?course='+encodeURIComponent(data.course):''),'cache-control':'no-store'});return res.end();
    }
-   if(p==='/api/content-access/approve'&&req.method==='POST'){
+   if(['/api/content-access/approve','/api/content-access/handoff'].includes(p)&&req.method==='POST'){
     const input=await read(req),proof=store.get('SELECT * FROM content_mfa_proofs WHERE session=? AND owner=? AND expires>?',s.id,s.user_id,Date.now());
     if(!proof)fail(403,'请先完成统一账户MFA');
     const identity=JSON.parse(proof.data);
     const allowed=new Set(store.all('SELECT * FROM courses WHERE enabled=1').flatMap(c=>business.list(c,true).filter(v=>v.published>0).map(v=>c.id+'/'+v.id)));
     if(!Array.isArray(input.resources)||input.resources.some(x=>!allowed.has(x)))fail(403,'包含不可开放课程');
     if(input.usage?.persistentDisplay!==true||input.usage?.retain!==true||input.usage?.compile!==true||!['members','authenticated'].includes(input.usage?.audience?.mode)||!Array.isArray(input.usage?.audience?.subjects))fail(422,'须明确持续成果使用授权及读者范围');
+    const handoff=p.endsWith('/handoff');let destination;
+    if(handoff){
+     try{const u=new URL(input.target?.origin);if(u.protocol!=='https:'||u.href!==u.origin+'/'||typeof input.target.bookId!=='string'||!/^[a-zA-Z0-9_-]{1,200}$/.test(input.target.bookId))throw Error();destination={origin:u.origin,bookId:input.target.bookId};}catch{fail(422,'请粘贴有效的BibleTree书籍接入请求');}
+    }else destination=apps.list(s.user_id).find(a=>a.id===input.application)?.grant?.usage?.destination;
     const outcome=store.transaction(()=>{
      const kind=store.get('SELECT admin FROM sessions WHERE id=?',s.id)?.admin?'root':store.get('SELECT user_id FROM user_admins WHERE user_id=?',s.user_id)?'delegated':null;if(!kind)fail(403,'课堂管理权限已撤销');
      store.run('INSERT INTO content_identity_bindings(owner,issuer,subject,admin_generation,admin_kind) VALUES(?,?,?,?,?) ON CONFLICT(owner) DO UPDATE SET admin_generation=excluded.admin_generation,admin_kind=excluded.admin_kind WHERE issuer=excluded.issuer AND subject=excluded.subject',s.user_id,identity.issuer,identity.subject,generation(),kind);
-     return apps.approve(input.application,s.user_id,identity,{...input,scopes:['content:read'],usage:{...input.usage,receiptId:randomUUID(),grantedBy:{issuer:identity.issuer,subject:identity.subject},grantedAt:new Date().toISOString()}});
+     const issued=handoff?apps.create(s.user_id,{name:input.name,target:destination.origin+'/?book='+destination.bookId}):null;
+     const grant=apps.approve(issued?.id||input.application,s.user_id,identity,{...input,scopes:['content:read'],usage:{...input.usage,...(destination?{destination}:{}),receiptId:randomUUID(),grantedBy:{issuer:identity.issuer,subject:identity.subject},grantedAt:new Date().toISOString()}});
+     return issued?{type:'seii.teaching-connection',version:1,origin,instanceId,application:issued.id,key:issued.key,resources:grant.resources,expires:grant.expires,target:destination,usage:grant.usage}:grant;
     });return json(res,200,outcome);
    }
    if(p==='/api/content-access/revoke'&&req.method==='POST'){const input=await read(req);apps.revoke(input.application,s.user_id,{key:!!input.key});return json(res,200,{ok:true});}

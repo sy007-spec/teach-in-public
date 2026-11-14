@@ -1,17 +1,29 @@
 let session;
+const selectedCourse=new URLSearchParams(location.search).get('course');
 const $=s=>document.querySelector(s);
 async function request(path,body){const r=await fetch('/api/content-access/'+path,{method:body?'POST':'GET',headers:body?{'content-type':'application/json','x-csrf-token':session.csrf}:{},body:body?JSON.stringify(body):undefined});const d=await r.json();if(!r.ok)throw Error(d.error||'请求失败');return d;}
 function message(e){$('#status').textContent=e.message||String(e);}
 async function refresh(){
  const data=await request('apps');$('#application').replaceChildren();$('#apps').replaceChildren();$('#courses').replaceChildren();
+ const fresh=document.createElement('option');fresh.value='';fresh.textContent='新建 BibleTree 连接';$('#application').append(fresh);
  for(const a of data.apps){if(!a.revoked){const o=document.createElement('option');o.value=a.id;o.textContent=a.name;$('#application').append(o);}
  const p=document.createElement('p');p.textContent=a.name+' · '+(a.revoked?'已撤销':a.grant?'授权至 '+new Date(a.grant.expires).toLocaleString():'未授权');if(!a.revoked){const b=document.createElement('button');b.type='button';b.textContent='撤销连接';b.onclick=async()=>{try{await request('revoke',{application:a.id,key:true});await refresh();}catch(e){message(e);}};p.append(b);}$('#apps').append(p);}
- for(const c of data.courses){const label=document.createElement('label'),box=document.createElement('input');box.type='checkbox';box.value=c.resource;label.append(box,document.createTextNode((c.title.zh||c.title.en||c.resource)+' · '+c.resource));$('#courses').append(label);}
+ for(const c of data.courses){const label=document.createElement('label'),box=document.createElement('input');box.type='checkbox';box.value=c.resource;box.checked=c.resource.split('/')[0]===selectedCourse;label.append(box,document.createTextNode((c.title.zh||c.title.en||c.resource)+' · '+c.resource));$('#courses').append(label);}
+ if(!data.courses.length||selectedCourse&&!data.courses.some(c=>c.resource.split('/')[0]===selectedCourse))message('所选课程尚无可开放的已发布版本，请先在课程管理中发布教材。');
+ selectApplication();
  if(!data.configured)message('管理员尚未配置统一身份服务，不能批准授权。');
 }
-$('#mfa').onclick=async()=>{try{const d=await request('start',{});location.assign(d.url);}catch(e){message(e);}};
-$('#create').onsubmit=async e=>{e.preventDefault();try{const d=await request('apps',Object.fromEntries(new FormData(e.target)));$('#issued').textContent='应用 '+d.id+'\n应用密钥仅显示一次，请存入接入方私有凭据存储：\n'+d.key;await refresh();}catch(err){message(err);}};
-$('#approve').onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));await request('approve',{application:d.application,hours:Number(d.hours),resources:[...$('#courses').querySelectorAll('input:checked')].map(x=>x.value),usage:{retain:true,compile:true,persistentDisplay:true,audience:{mode:d.audience,subjects:d.subjects.split(/\s+/).filter(Boolean)}}});message('授权已批准');await refresh();}catch(err){message(err);}};
+function selectApplication(){const existing=!!$('#application').value;$('#destination').hidden=existing;$('#grantSubmit').textContent=existing?'明确更新授权':'授权并复制接入信息';}
+$('#application').onchange=selectApplication;
+function readRequest(text){if(text.length>10000)throw Error('接入请求过大');let d;try{d=JSON.parse(text);}catch{throw Error('请粘贴 BibleTree 生成的完整接入请求');}let u;try{u=new URL(d.target?.origin);}catch{throw Error('接入请求站点无效');}if(d.type!=='seii.bibletree-request'||d.version!==1||u.protocol!=='https:'||u.href!==u.origin+'/'||!(/^[a-zA-Z0-9_-]{1,200}$/).test(d.target?.bookId||''))throw Error('接入请求格式或版本无效');const f=$('#approve');f.elements.targetOrigin.value=u.origin;f.elements.targetBook.value=d.target.bookId;f.elements.name.value=String(d.target.title||'BibleTree课程接入').slice(0,100);$('#requestText').value='';message('已填入目标书籍，请核对课程范围与成果使用权。');}
+$('#readRequest').onclick=()=>{try{readRequest($('#requestText').value);}catch(e){message(e);}};
+$('#requestText').addEventListener('paste',e=>{e.preventDefault();try{readRequest(e.clipboardData.getData('text'));}catch(err){message(err);}});
+$('#pasteRequest').onclick=async()=>{try{readRequest(await navigator.clipboard.readText());}catch{message('无法读取剪贴板或请求无效，请在接入请求框手动粘贴。');$('#requestText').focus();}};
+async function copyIssued(){try{await navigator.clipboard.writeText($('#issued').value);message('授权接入信息已复制，请到目标书籍粘贴。');}catch{message('授权已生成。浏览器未允许复制，请点击再次复制或手动复制下方接入信息。');$('#issued').focus();$('#issued').select();}}
+$('#copyIssued').onclick=copyIssued;
+$('#clearIssued').onclick=()=>{$('#issued').value='';$('#handoffResult').hidden=true;};
+$('#mfa').onclick=async()=>{try{const d=await request('start',{course:selectedCourse});location.assign(d.url);}catch(e){message(e);}};
+$('#approve').onsubmit=async e=>{e.preventDefault();const submit=$('#grantSubmit');if(submit.disabled)return;submit.disabled=true;try{const d=Object.fromEntries(new FormData(e.target)),resources=[...$('#courses').querySelectorAll('input:checked')].map(x=>x.value);if(!resources.length)throw Error('请至少选择一个已发布课程版本');if(!d.rights)throw Error('请明确确认成果使用授权');if(!d.application&&$('#issued').value)throw Error('接入信息已经生成，请复制现有信息；如需另建连接，先清除显示。');const result=await request(d.application?'approve':'handoff',{application:d.application,name:d.name,target:{origin:d.targetOrigin,bookId:d.targetBook},hours:Number(d.hours),resources,usage:{retain:true,compile:true,persistentDisplay:true,audience:{mode:d.audience,subjects:d.subjects.split(/\s+/).filter(Boolean)}}});if(!d.application){$('#issued').value=JSON.stringify(result,null,2);$('#handoffResult').hidden=false;await copyIssued();}else message('授权已更新，原密钥继续使用。');await refresh();}catch(err){message(err);}finally{submit.disabled=false;}};
 try{session=await (await fetch('/api/session')).json();if(!session.admin)throw Error('请先在课堂管理页登录管理员。');await refresh();}catch(e){message(e);}
 
 const notices=document.createElement('section');notices.innerHTML='<h2>课程纠错与停止维护</h2><p>仅发送来源状态通知，不会自动删除已发布的独立书籍。</p><form id="noticeForm"><label>课程ID/业务版本<input name="resource" required></label><label>状态<select name="status"><option value="withdrawn">撤回并要求复核</option><option value="stopped">停止维护</option><option value="active">恢复维护</option></select></label><label>原因<textarea name="reason" required></textarea></label><label>替代课程或版本<input name="replacement"></label><button>发布来源通知</button></form>';
