@@ -63,11 +63,12 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
     const grant=apps.verify(String(req.headers.authorization||'').replace(/^Bearer /,''),'content:read',object);
     if(p.endsWith('/catalog')){
      const items=catalog(grant),notices=store.all('SELECT * FROM content_notices ORDER BY resource').filter(x=>grant.resources.includes(x.resource));
-     const etag=hash(JSON.stringify({items,notices,usage:grant.usage}));
+     const grantExpiresAt=apps.grantInfo(grant.application).expires;
+     const etag=hash(JSON.stringify({items,notices,usage:grant.usage,grantExpiresAt}));
      if(u.searchParams.get('snapshot')&&u.searchParams.get('snapshot')!==etag)fail(409,'snapshot_expired');
      const offset=Number(u.searchParams.get('cursor')||0),limit=Math.min(200,Number(u.searchParams.get('limit')||200));
      if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1)fail(422,'目录游标无效');
-     return json(res,200,{items:items.slice(offset,offset+limit),next:offset+limit<items.length?String(offset+limit):null,etag,notices,usage:grant.usage});
+     return json(res,200,{items:items.slice(offset,offset+limit),next:offset+limit<items.length?String(offset+limit):null,etag,notices,usage:grant.usage,grantExpiresAt});
     }
     if(p.endsWith('/revision')){const result=content(grant,u.searchParams.get('course'),u.searchParams.get('version'),u.searchParams.get('revision'));apps.verify(String(req.headers.authorization||'').replace(/^Bearer /,''),'content:read',object);return json(res,200,result);}
     fail(404,'接口不存在');

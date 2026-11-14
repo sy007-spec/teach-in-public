@@ -57,7 +57,7 @@ test('course API requires explicit MFA approval, isolates versions and strips in
   assert.equal((await request('/api/content-access/token',{resource:origin+'/api/content/v1',scopes:['content:read']},bundle.key)).status,401);
   const access=(await request('/api/content-access/token',{resource:origin+'/api/content/v1',scopes:['content:read']},app.key)).data.access_token;
   assert.equal((await request('/api/content/v1/catalog',null,app.key)).status,401);
-  const catalog=await request('/api/content/v1/catalog',null,access);assert.equal(catalog.data.items.length,1);
+  const catalog=await request('/api/content/v1/catalog',null,access);assert.equal(catalog.data.items.length,1);assert.equal(catalog.data.grantExpiresAt,service.apps.grantInfo(app.id).expires);
   const content=await request('/api/content/v1/revision?course=course&version=v1&revision=1',null,access);
   assert.equal(content.status,200);assert(!content.data.content.text.includes('私有讲师备注'));assert(content.data.usage.receiptId);
   assert.equal((await request('/api/content/v1/revision?course=other&version=v1&revision=1',null,access)).status,403);
