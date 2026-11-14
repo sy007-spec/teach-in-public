@@ -27,7 +27,7 @@ test('course API requires explicit MFA approval, isolates versions and strips in
  const service=courseContentAccess({store,business,origin,config,fetcher,keySet:publicKey});
  const server=createServer((req,res)=>service.route(req,res,()=>s));await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const base='http://127.0.0.1:'+server.address().port;
- async function request(path,body,token){const r=await fetch(base+path,{method:body?'POST':'GET',redirect:'manual',headers:{origin,'content-type':'application/json','x-csrf-token':'csrf',...(token?{authorization:'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:r.status===303?null:await r.json()};}
+ async function request(path,body,token){const r=await fetch(base+path,{method:body?'POST':'GET',redirect:'manual',headers:{origin,'content-type':'application/json','x-csrf-token':'csrf',...(token?{authorization:'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,location:r.headers.get('location'),data:r.status===303?null:await r.json()};}
  try{
   const app=(await request('/api/content-access/apps',{name:'虚构接入',target:'book'})).data;
   const approval={application:app.id,hours:720,resources:['course/v1'],usage:{retain:true,compile:true,persistentDisplay:true,audience:{mode:'members',subjects:['unified-owner']}}};
@@ -35,9 +35,9 @@ test('course API requires explicit MFA approval, isolates versions and strips in
   const handoff={...approval,name:'BibleTree测试',target:{origin:'https://books.example',bookId:'book-1'}};
   assert.equal((await request('/api/content-access/handoff',handoff)).status,403);
   assert.equal(service.apps.list(s.user_id).length,1,'No app is created before MFA');
-  const begin=(await request('/api/content-access/start',{})).data,auth=new URL(begin.url);nonce=auth.searchParams.get('nonce');
+  const begin=(await request('/api/content-access/start',{course:'course',application:app.id})).data,auth=new URL(begin.url);nonce=auth.searchParams.get('nonce');
   const callback='/api/content-access/callback?code=code&state='+auth.searchParams.get('state');
-  assert.equal((await request(callback)).status,303);assert.equal((await request(callback)).status,401);
+  const callbackResult=await request(callback);assert.equal(callbackResult.status,303);assert.equal(callbackResult.location,'/admin?view=contentAccess&course=course&application='+encodeURIComponent(app.id));assert.equal((await request(callback)).status,401);
   store.run('INSERT INTO content_identity_people VALUES(?,?,?)','https://unrelated.example','other-person','Other');
   assert.deepEqual((await request('/api/content-access/apps')).data.readers.map(p=>p.subject),['unified-owner'],'Only verified identities from this issuer are listed');
   assert.equal((await request('/api/content-access/approve',approval)).status,200);
@@ -52,6 +52,7 @@ test('course API requires explicit MFA approval, isolates versions and strips in
   assert.deepEqual((await request('/api/content/v1/catalog',null,issuedAccess)).data.usage.destination,handoff.target);
   assert.equal((await request('/api/content-access/approve',{...approval,application:bundle.application})).status,200);
   assert.deepEqual(service.apps.grantInfo(bundle.application).usage.destination,handoff.target,'Renewal retains destination');
+  assert.equal((await request('/api/content-access/token',{resource:origin+'/api/content/v1',scopes:['content:read']},bundle.key)).status,200,'Direct update preserves the existing application key');
   await request('/api/content-access/revoke',{application:bundle.application,key:true});
   assert.equal((await request('/api/content-access/token',{resource:origin+'/api/content/v1',scopes:['content:read']},bundle.key)).status,401);
   const access=(await request('/api/content-access/token',{resource:origin+'/api/content/v1',scopes:['content:read']},app.key)).data.access_token;

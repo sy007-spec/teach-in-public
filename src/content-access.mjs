@@ -84,9 +84,9 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
     store.run('INSERT OR REPLACE INTO content_notices VALUES(?,?,?,?,?)',input.resource,input.status,input.reason,String(input.replacement||'').slice(0,300),new Date().toISOString());return json(res,200,{ok:true});
    }
    if(p==='/api/content-access/start'&&req.method==='POST'){
-    const input=await read(req),course=typeof input.course==='string'?input.course.slice(0,200):'',d=await metadata(),state=token(),verifier=token(),nonce=token();
+    const input=await read(req),course=typeof input.course==='string'?input.course.slice(0,200):'',application=typeof input.application==='string'?input.application.slice(0,200):'',d=await metadata(),state=token(),verifier=token(),nonce=token();
     store.run('DELETE FROM content_oidc_flows WHERE expires<?',Date.now());
-    store.run('INSERT INTO content_oidc_flows VALUES(?,?,?,?,?)',hash(state),s.user_id,s.id,JSON.stringify({verifier,nonce,course}),Date.now()+600000);
+    store.run('INSERT INTO content_oidc_flows VALUES(?,?,?,?,?)',hash(state),s.user_id,s.id,JSON.stringify({verifier,nonce,course,application}),Date.now()+600000);
     const target=new URL(d.authorization_endpoint);
     for(const [k,v]of Object.entries({client_id:config.clientId,redirect_uri:origin+'/api/content-access/callback',response_type:'code',scope:'openid profile',state,nonce,code_challenge:hashBase64(verifier),code_challenge_method:'S256',prompt:'login',max_age:'0'}))target.searchParams.set(k,v);
     return json(res,200,{url:target.href});
@@ -106,7 +106,7 @@ export function courseContentAccess({store,business,origin,config={},fetcher=fet
     if(existing&&(existing.issuer!==proof.issuer||existing.subject!==proof.subject))fail(403,'统一账户与既有绑定不一致');
     store.run('INSERT OR REPLACE INTO content_mfa_proofs VALUES(?,?,?,?)',s.id,s.user_id,JSON.stringify(proof),Date.now()+600000);
     store.run('INSERT OR REPLACE INTO content_identity_people VALUES(?,?,?)',proof.issuer,proof.subject,String(payload.name||store.get('SELECT name FROM users WHERE id=?',s.user_id)?.name||'已验证账户').slice(0,200));
-    res.writeHead(303,{location:'/content-access'+(data.course?'?course='+encodeURIComponent(data.course):''),'cache-control':'no-store'});return res.end();
+    res.writeHead(303,{location:'/admin?view=contentAccess'+(data.course?'&course='+encodeURIComponent(data.course):'')+(data.application?'&application='+encodeURIComponent(data.application):''),'cache-control':'no-store'});return res.end();
    }
    if(['/api/content-access/approve','/api/content-access/handoff'].includes(p)&&req.method==='POST'){
     const input=await read(req),proof=store.get('SELECT * FROM content_mfa_proofs WHERE session=? AND owner=? AND expires>?',s.id,s.user_id,Date.now());

@@ -1,3 +1,4 @@
+import {notify} from './notifications.js';
 import {esc} from './render.js';
 export async function renderKnowledgeImpact({root,api,t}){
  const text=(zh,en)=>t(zh,en),num=n=>n==null?'—':Number(n).toLocaleString(),percent=(a,b)=>b?Math.round(100*(a||0)/b)+'%':'—';let days=30,offset=0;
@@ -22,10 +23,10 @@ export async function renderKnowledgeImpact({root,api,t}){
     (x.evidence||[]).map(e=>'<details><summary>'+esc(e.title)+' · '+esc(e.id)+'</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(e.text)+'</pre></details>').join('')+'<p class="small">'+text('原文只显示当前仍公开获准的版本；资料变更或撤回后不重放旧正文。问答正文仍按课堂原权限访问。','Only currently authorized public evidence is shown. Changed or withdrawn passages are not replayed. Questions and answers keep their classroom permissions.')+'</p>'+
     table([text('步骤 / 模型','Stage / model'),text('注入知识字符','Knowledge characters'),text('请求字符（含格式）','Request characters (incl. JSON)'),text('耗时','Duration'),'Tokens'],x.calls.map(c=>row([esc(stage(c.stage))+' / '+esc(c.model),num(c.knowledgeCharacters),num(c.inputCharacters),num(c.duration)+' ms',num(c.usage?.total)])))+
     (r.channel==='classroom'?'<button data-question>'+text('按原权限查看当前问答','View current Q&A with original permissions')+'</button><div data-question-body></div>':'')+' <label>'+text('人工评价','Human rating')+' <select data-rating>'+['unrated','helpful','partial','unhelpful'].map(k=>'<option value="'+k+'" '+(r.rating===k?'selected':'')+'>'+rating(k)+'</option>').join('')+'</select></label> <button data-save-rating>'+text('保存评价','Save rating')+'</button></article>';
-   const questionButton=detail.querySelector('[data-question]');if(questionButton)questionButton.onclick=async()=>{const box=detail.querySelector('[data-question-body]');try{const q=await api('/api/question?id='+encodeURIComponent(r.question),{courseId:r.course,businessVersion:r.business});box.innerHTML='<p>'+text('这是当前问答，编辑或重新生成后可能与本次调用不同。','This is the current Q&A; edits or regeneration may differ from this run.')+'</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(q.body)+'\n\n'+esc(q.ai?.body||'')+'</pre>'}catch(e){box.textContent=e.message}};
-   detail.querySelector('[data-save-rating]').onclick=async()=>{try{await api('/api/admin/knowledge-impact',{method:'POST',body:{id:r.id,rating:detail.querySelector('[data-rating]').value}});await load();root.querySelector('[data-message]').textContent=text('评价已保存','Rating saved')}catch(e){root.querySelector('[data-message]').textContent=e.message}};
-  }catch(e){root.querySelector('[data-message]').textContent=e.message}});
+   const questionButton=detail.querySelector('[data-question]');if(questionButton)questionButton.onclick=async()=>{const box=detail.querySelector('[data-question-body]');try{const q=await api('/api/question?id='+encodeURIComponent(r.question),{courseId:r.course,businessVersion:r.business});box.innerHTML='<p>'+text('这是当前问答，编辑或重新生成后可能与本次调用不同。','This is the current Q&A; edits or regeneration may differ from this run.')+'</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(q.body)+'\n\n'+esc(q.ai?.body||'')+'</pre>'}catch(e){box.textContent=e.message;notify(e.message,'error')}};
+   detail.querySelector('[data-save-rating]').onclick=async()=>{try{await api('/api/admin/knowledge-impact',{method:'POST',body:{id:r.id,rating:detail.querySelector('[data-rating]').value}});await load();root.querySelector('[data-message]').textContent=text('评价已保存','Rating saved')}catch(e){root.querySelector('[data-message]').textContent=e.message;notify(e.message,'error')}};
+  }catch(e){root.querySelector('[data-message]').textContent=e.message;notify(e.message,'error')}});
  }
- async function safeLoad(){try{await load()}catch(e){root.textContent=e.message}}
+ async function safeLoad(){try{await load()}catch(e){root.textContent=e.message;notify(e.message,'error')}}
  await safeLoad();
 }

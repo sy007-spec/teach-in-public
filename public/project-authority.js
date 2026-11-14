@@ -1,3 +1,4 @@
+import {notify} from './notifications.js';
 const el=(tag,text)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;return node;};
 export async function renderProjectAuthority({root,course,api,t}){
  root.replaceChildren();root.append(el('h2',t('课程授权','Course access')));
@@ -17,7 +18,7 @@ export async function renderProjectAuthority({root,course,api,t}){
   form.append(el('p',t('只批准阅读时，不勾选下方教学能力。','Leave teaching capabilities unchecked to approve reading only.')));
   const checks={};for(const [key,zh,en] of keys){const input=el('input');input.type='checkbox';input.checked=!!user.capabilities[key];checks[key]=input;const label=el('label',t(zh,en));label.prepend(input);form.append(label);}
   const approve=el('button',t('确认课程授权','Confirm course access'));approve.type='submit';const revoke=el('button',t('撤销本课程权限','Revoke course access'));revoke.type='button';form.append(approve,revoke);
-  async function save(decision){approve.disabled=revoke.disabled=true;try{await api('/api/project-authority',{method:'POST',body:{course,user:user.id,status:decision,days:Number(days.value),capabilities:Object.fromEntries(Object.entries(checks).map(([key,input])=>[key,input.checked]))}});await renderProjectAuthority({root,course,api,t});}catch(e){status.textContent=e.message;approve.disabled=revoke.disabled=false;}}
+  async function save(decision){approve.disabled=revoke.disabled=true;try{await api('/api/project-authority',{method:'POST',body:{course,user:user.id,status:decision,days:Number(days.value),capabilities:Object.fromEntries(Object.entries(checks).map(([key,input])=>[key,input.checked]))}});await renderProjectAuthority({root,course,api,t});}catch(e){status.textContent=e.message;notify(e.message,'error');approve.disabled=revoke.disabled=false;}}
   form.onsubmit=event=>{event.preventDefault();void save('approved');};revoke.onclick=()=>void save('revoked');root.append(form);
  }
 }

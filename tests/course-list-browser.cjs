@@ -45,7 +45,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   assert(await page.locator('#switchCourseCode').isVisible());
   assert.equal(await page.locator('.switch-course-grid img').count(),0);
   await page.locator('[data-switch-course="second-course"]').click();
-  await page.waitForFunction(()=>document.getElementById('toast')?.textContent.includes('published'));
+  await page.waitForFunction(()=>document.querySelector('.notice-stack')?.textContent.includes('published'));
   assert.equal(await page.locator('[data-switch-course="second-course"]').isDisabled(),false);
   await page.locator('[data-switch-course="pamm"]').click();
   await page.waitForURL(url=>url.pathname==='/');await page.locator('#pageContent').waitFor();

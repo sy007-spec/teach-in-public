@@ -9,7 +9,8 @@ function position(){if(!active?.isConnected)return hide();const r=active.getBoun
 function show(el){if(!el||el===dismissed)return;const text=label(el);if(!text)return;hide();active=el;if(el.hasAttribute('title')){el.dataset.tooltip=el.getAttribute('title');el.removeAttribute('title')}if(!bubble){bubble=document.createElement('div');bubble.id='instant-tool-tip';bubble.className='instant-tool-tip';bubble.setAttribute('role','tooltip');bubble.setAttribute('popover','manual');document.body.append(bubble)}bubble.textContent=text;bubble.hidden=false;const host=document.fullscreenElement||el.closest('dialog[open]')||document.body;if(bubble.parentElement!==host)host.append(bubble);if(bubble.showPopover&&!bubble.matches(':popover-open'))bubble.showPopover();el.setAttribute('aria-describedby',[(el.getAttribute('aria-describedby')||''),bubble.id].filter(Boolean).join(' '));position()}
 document.addEventListener('pointerover',e=>{if(e.pointerType==='touch')return;const el=e.target.closest?.(selector);if(el&&el!==active){dismissed=null;show(el)}},true);
 document.addEventListener('pointerout',e=>{if(active?.contains(e.target)&&!active.contains(e.relatedTarget)){dismissed=null;hide()}},true);
-document.addEventListener('focusin',e=>{dismissed=null;show(e.target.closest?.(selector))},true);
+// Popover/dialog focus restoration occurs inside the browser's top-layer transition.
+document.addEventListener('focusin',e=>{const target=e.target;queueMicrotask(()=>{if(document.activeElement===target){dismissed=null;show(target.closest?.(selector))}})},true);
 document.addEventListener('focusout',hide,true);
 document.addEventListener('pointerdown',hide,true);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){dismissed=active;hide()}},true);
