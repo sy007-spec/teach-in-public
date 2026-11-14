@@ -275,3 +275,6 @@ Administrators can reauthorize revoked or denied personal access for 1–2160 ho
 新学员需输入课程口令并完成账户安全验证，首次进入该课程时才可能领取一次授权。按邮箱账户识别，已有访问、申请或继承授权记录的用户不重复领取；教师、管理员及已经具有访问权限的人不另增授权。授权绑定当前浏览器和 IP，与人工批准本人一致，不扩大 IP 白名单。活动结束、关闭或修改不会追溯更改已有授权的到期时间；撤销后不再自动补发，管理员仍可手动重新授权。列表标记「首次访问自动授权」。
 
 In Access requests, administrators configure each course independently: enable the campaign, set start/end times in the displayed browser timezone, and choose 1–2160 access hours (24 by default). Campaigns are off by default. Verified first-time course learners receive at most one personal grant during the start-inclusive, end-exclusive window. Previous visitors/applicants and revoked users are not re-enrolled automatically. Existing access remains unchanged; stopping or editing a campaign does not change grants already issued. Grants retain the same browser/IP restrictions and manual revocation controls as personal approvals.
+
+### 课程助教直接回答
+助教默认使用提问时的界面语言直接回答，不要求JSON、固定字段、精确引用编号或同时生成中英文。普通Markdown和既有单语/双语回答均可展示，参考资料由系统从实际检索结果附上。模型达到输出长度上限时保留已收到的正文并提示可以追问。自动内容核验未完成时保留回答并明确提示；明确的内容冲突仍需讲师确认。课程、讨论权限和资料有效性校验不变。
