@@ -1,4 +1,4 @@
-import {classroomLogo} from './share-card.js';
+import {classroomLogo,invitationTerms} from './share-card.js';
 import {esc} from './render.js';
 import {readLanguage,saveLanguage,languageButton} from './language.js';
 const root=document.getElementById('shareRoot'),toolbar=document.getElementById('shareLanguage'),params=new URLSearchParams(location.hash.slice(1)),raw=params.get('share');
@@ -14,7 +14,7 @@ function render(){
  const d=entry;
  root.innerHTML='<div class="share-brand">'+classroomLogo(d)+'<strong>'+esc(d.classroomName||t('课堂','Classroom'))+'</strong> <span>'+t('课程邀请','COURSE INVITATION')+'</span></div><div class="share-cover" aria-hidden="true">'+esc([...(d.title[lang]||d.title.zh||d.title.en)][0])+'</div><h1>'+esc(d.title[lang]||d.title.zh||d.title.en)+'</h1><p>'+t('选择适合你的阅读方式','Choose how you want to learn')+'</p><label>'+t('课程口令（已自动填入）','Course code (automatically filled)')+'<input readonly value="'+esc(d.code)+'"></label><div class="share-choice"><a id="readPpt" class="primary-choice" href="'+esc(languageUrl(d.pptUrl))+'"><strong>'+t('PPT 阅读','PPT reading')+'</strong><p>'+t('第一页无需登录、无需审批即可阅读。打开下一页时提交申请，获管理员批准后继续阅读。','Read the first page without sign-in or approval. Request administrator approval when opening the next page to continue.')+'</p><span class="share-cta">'+t('开始阅读 →','Start reading →')+'</span></a><a id="joinClassroom" href="'+esc(languageUrl(d.classroomUrl))+'"><strong>'+t('课堂模式','Classroom')+'</strong><p>'+t('登记邮箱并完成账户验证，获得 ','Register your email and verify your account for ')+d.classroomHours+t(' 小时正式课程授权，可使用笔记和问答。',' hours of classroom access, with notes and discussion.')+'</p><span class="share-cta">'+t('登记邮箱并进入 →','Register and enter →')+'</span></a></div><p class="small muted">'+t('已有授权按原期限执行；被撤销的授权需联系管理员。','Existing access retains its original term. Contact the administrator for revoked access.')+'</p>';
  if(d.instructor){document.getElementById('readPpt').remove();document.querySelector('#joinClassroom strong').textContent=t('讲师邀请','Instructor invitation');document.querySelector('#joinClassroom p').textContent=t('完成账户验证后，获得本课程限时讲师权限。','Verify your account to receive a time-limited instructor grant for this course.')}
- if(d.instructor){const note=document.createElement('p');note.textContent=t('不限人数，链接有效至 ','Unlimited recipients. Link valid until ')+new Date(d.invitationExpires).toLocaleString(lang==='zh'?'zh-CN':'en-US');root.append(note)}
+ if(d.instructor){const terms=invitationTerms(d,t),note=document.createElement('section');note.className='share-modes';note.innerHTML='<div><strong>'+terms.deadlineLabel+'</strong><span>'+esc(terms.deadline)+'</span></div><div><strong>'+terms.grantLabel+'</strong><span>'+esc(terms.grant)+'</span></div>';root.append(note);const explanation=document.createElement('p');explanation.textContent=t('不限人数。','Unlimited recipients. ')+terms.note;root.append(explanation)}
 
 }
 render();
