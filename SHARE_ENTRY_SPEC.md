@@ -38,3 +38,9 @@
 Administrators can configure names and light/dark logos under Content → Classroom settings. Logos are stored locally and included in headers, share cards, landing pages and exported images. Hosted names remain managed by the hosting platform. Previously exported images do not update automatically.
 
 课堂授权支持 1–5000 整数小时；PPT 时长仍按课程上限单独控制。Classroom authorization supports 1–5000 whole hours; PPT reading retains its separate course limit.
+
+## Compact share preview (2026-11-15)
+
+The generated share result uses a wide, compact preview with course content on the left and QR/scan instructions on the right. The preview adapts to available dialog height; ordinary laptop viewports show the complete card, URL and action buttons together. Narrow screens retain a readable QR and two-column actions. Exceptionally long content can scroll inside the preview without pushing actions below the window. PNG export remains full resolution and is independent from preview dimensions.
+
+Browser acceptance covers 1366×768, 1280×720, 1024×600 and 390×844: all preview imagery and copy/save actions remain in the viewport, ordinary fixture content has no internal clipping, and no page horizontal overflow. Copy-image, PNG download, classroom/instructor invitations and revocation continue to pass.
