@@ -29,7 +29,7 @@ The classroom includes a resizable presentation workspace, independent browser t
 
 Administrators configure course permissions, instructors, user security resets, sharing permissions and publication. Learners can discuss, annotate, attach compressed images and keep private notes. Visibility rules apply to replies, attachments, exports and pinned discussions.
 
-Shared reading links have bounded lifetimes and administrator approval controls. Reading analytics are engagement indicators, not proof of learning. Optional Lark integration and scoped agent APIs require configuration and authorization.
+Course sharing offers a downloadable card and QR code with two recipient choices: anonymous timed PPT reading, or email registration and account verification for bounded classroom access. Legacy links retain administrator approval controls. See [sharing](SHARE_ENTRY_SPEC.md). Reading analytics are engagement indicators, not proof of learning. Optional Lark integration and scoped agent APIs require configuration and authorization.
 
 The optional Feishu/Lark **classroom assistant** (课堂助手) turns a group chat into a classroom: discussions are cleaned, anonymised, kept within the course key description and saved daily as course sources, and the course draft is refreshed from them; nothing is published automatically. It is a paid add-on of the managed hosting service, which injects its private Feishu/Lark module (`createApp({larkAssist})`); self-hosted installations keep the free statistics and approval cards. See [LARK_CLASSROOM_SPEC.md](LARK_CLASSROOM_SPEC.md).
 

@@ -539,3 +539,40 @@ test('search summaries withhold incomplete pages, repair missing items and reuse
  const retry=await a.request('/api/course-search/summaries','POST',body);assert.equal(retry.data.status,'ready');assert.equal(retry.data.items.length,2);assert.equal(calls,3);assert.deepEqual(requests[2],requests[1]);assert(retry.data.items.every(i=>i.summary&&i.title));assert(retry.data.items.every(i=>!('quote' in i)));
  }finally{await f.cleanup()}
 });
+
+
+test('dual-mode share prefills code, reads anonymously and enrolls a verified classroom account once',async()=>{
+ const f=await fixture();try{
+  const admin=f.client(),recipient=f.client(false);await admin.login();await admin.request('/api/admin/select','POST',{course:'pamm'});await recipient.select();
+  const issue=await admin.request('/api/ppt-shares','POST',{course:'pamm',hours:2,classroomHours:3,dualMode:true,confirm:true,creatorEmail:'teacher@example.test',creatorName:'Teacher'});
+  assert.equal(issue.status,201);assert.equal(new URL(issue.data.url).pathname,'/share');assert.equal(issue.data.classroomHours,3);
+  const share=new URLSearchParams(new URL(issue.data.url).hash.slice(1)).get('share'),headers={authorization:'Bearer '+share,'x-ppt-visitor':'a'.repeat(64)};
+  const entry=await (await fetch(f.base+'/api/share-entry',{headers})).json();assert.equal(entry.code,'pamm');assert.equal(entry.title.zh,issue.data.title.zh);assert(!entry.material);
+  assert.equal(f.store.get('SELECT COUNT(*) n FROM ppt_read_windows').n,0,'Opening the choice card does not start reading time');
+  const read=await (await fetch(f.base+'/api/ppt-public',{headers})).json();assert(read.material);assert(!JSON.stringify(read.material).includes('speaker'));assert.equal(Date.parse(read.expires)-Date.parse(read.started),2*3600000);
+  assert.equal((await recipient.request('/api/share-enroll','POST',{share})).status,401,'Email registration alone cannot take over an existing account');
+  await recipient.request('/api/security/complete','POST',{mode:'password',secret:'test-security-password-987',confirm:'test-security-password-987'});
+  const enrolled=await recipient.request('/api/share-enroll','POST',{share});assert.equal(enrolled.status,200);assert.equal(enrolled.data.status,'approved');assert.equal((await recipient.request('/api/course')).status,200);
+  const first=enrolled.data.expires;assert.equal((await recipient.request('/api/share-enroll','POST',{share})).data.expires,first);
+  const grant=f.store.get('SELECT request_id FROM share_enrollments');await admin.request('/api/admin/revoke','POST',{id:grant.request_id});assert.equal((await recipient.request('/api/share-enroll','POST',{share})).data.status,'revoked');assert.equal((await recipient.request('/api/course')).status,403);
+  f.store.run('UPDATE ppt_read_windows SET expires=?',new Date(Date.now()-1000).toISOString());assert((await (await fetch(f.base+'/api/ppt-public',{headers})).json()).expired);
+  await admin.request('/api/ppt-shares','DELETE',{id:issue.data.id});assert.equal((await fetch(f.base+'/api/share-entry',{headers})).status,404);assert.equal((await recipient.request('/api/share-enroll','POST',{share})).status,404);
+ }finally{await f.cleanup()}
+});
+
+test('dual-mode share enforces duration, permission, publication and course boundaries; legacy links remain gated',async()=>{
+ const f=await fixture();try{
+  const admin=f.client(),learner=f.client();await admin.login();await admin.request('/api/admin/select','POST',{course:'pamm'});await learner.select();
+  const body={course:'pamm',hours:2,classroomHours:3,dualMode:true,confirm:true,creatorEmail:'teacher@example.test',creatorName:'Teacher'};
+  assert.equal((await learner.request('/api/ppt-shares','POST',body)).status,403);
+  for(const bad of [0,25,1.5])assert.equal((await admin.request('/api/ppt-shares','POST',{...body,classroomHours:bad})).status,400);
+  const legacy=await admin.request('/api/ppt-shares','POST',{...body,dualMode:false}),old=new URLSearchParams(new URL(legacy.data.url).hash.slice(1)).get('share');
+  assert.equal((await fetch(f.base+'/api/share-entry',{headers:{authorization:'Bearer '+old}})).status,404);
+  assert((await (await fetch(f.base+'/api/ppt-public',{headers:{authorization:'Bearer '+old,'x-ppt-visitor':'b'.repeat(64)}})).json()).approvalRequired);
+  const issued=await admin.request('/api/ppt-shares','POST',body),share=new URLSearchParams(new URL(issued.data.url).hash.slice(1)).get('share');
+  assert.equal((await fetch(f.base+'/api/share-entry',{headers:{authorization:'Bearer '+share+'!'}})).status,404);
+  const other=f.client();await other.select();f.store.run('UPDATE sessions SET course_id=NULL WHERE user_id=(SELECT user_id FROM email_users WHERE email=?)',(await other.session()).data.user.email);
+  assert.equal((await other.request('/api/share-enroll','POST',{share})).status,403);
+  f.store.run("UPDATE courses SET enabled=0 WHERE id='pamm'");assert.equal((await fetch(f.base+'/api/share-entry',{headers:{authorization:'Bearer '+share}})).status,404);
+ }finally{await f.cleanup()}
+});
