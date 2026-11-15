@@ -16,5 +16,8 @@ test('public program assets compress and revalidate; HTML never caches',async()=
   const head=await get('/app.js',{'accept-encoding':'gzip'},'HEAD');assert.equal(head.body.length,0);assert.equal(Number(head.headers['content-length']),gzip.body.length);
   assert.equal((await get('/app.js',{'accept-encoding':'br;q=0,gzip;q=0'})).headers['content-encoding'],undefined);
   const html=await get('/',{'if-none-match':'*'});assert.equal(html.status,200);assert.equal(html.headers['cache-control'],'no-store');assert.equal(html.headers.etag,undefined);
+  const revision=html.body.toString().match(/\/app\.js\?v=([a-f0-9]{16})/)[1];
+  assert(plain.body.toString().includes('./reading-share.js?v='+revision));
+  assert(html.body.toString().includes('/app.css?v='+revision));
  }finally{await new Promise(r=>server.close(r))}
 });
