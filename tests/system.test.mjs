@@ -10,6 +10,28 @@ import {uid,dayKey,dateRange,validateMaterial,ipMatches} from '../src/security.m
 import {verifyCallback,LarkService,buildCard} from '../src/lark.mjs';
 import {testMaterial} from './fixtures/markdown.mjs';
 
+test('classroom branding is admin-controlled, public logos are normalized and classroom access supports 5000 hours',async()=>{
+ const f=await fixture();try{
+  const admin=f.client(),learner=f.client();await admin.login();await admin.request('/api/admin/select','POST',{course:'pamm'});await learner.select();
+  const initial=(await admin.request('/api/admin/classroom-settings')).data;
+  assert.equal((await learner.request('/api/admin/classroom-settings','PUT',{name:'Bad',expectedName:initial.name})).status,403);
+  assert.equal((await admin.request('/api/admin/classroom-settings','PUT',{name:'GTCFX AI Training',expectedName:initial.name})).status,200);
+  assert.equal((await admin.request('/api/admin/classroom-settings','PUT',{name:'Stale',expectedName:initial.name})).status,409);
+  assert.equal((await learner.session()).data.classroomName,'GTCFX AI Training');
+  const png=await sharp({create:{width:16,height:8,channels:4,background:'#124578'}}).png().toBuffer(),data='data:image/png;base64,'+png.toString('base64');
+  assert.equal((await learner.request('/api/admin/classroom-logo','PUT',{theme:'light',data,expectedRevision:null})).status,403);
+  assert.equal((await admin.request('/api/admin/classroom-logo','PUT',{theme:'light',data:'data:image/webp;base64,AAAA',expectedRevision:null})).status,400);
+  for(const theme of ['light','dark'])assert.equal((await admin.request('/api/admin/classroom-logo','PUT',{theme,data,expectedRevision:null})).status,200);
+  const issued=await admin.request('/api/shares','POST',{course:'pamm',hours:24,classroomHours:5000,confirm:true,creatorEmail:'admin@example.test',creatorName:'Admin'});assert.equal(issued.status,201);assert.equal(issued.data.classroomName,'GTCFX AI Training');assert.equal(issued.data.classroomHours,5000);assert.equal(issued.data.durationHours,24);
+  const logo=await fetch(f.base+issued.data.classroomLogos.light.url);assert.equal(logo.status,200);assert.equal(logo.headers.get('content-type'),'image/webp');assert.equal((await sharp(Buffer.from(await logo.arrayBuffer())).metadata()).format,'webp');
+  assert.equal((await admin.request('/api/admin/classroom-logo','PUT',{theme:'light',data,expectedRevision:null})).status,409);
+  const share=new URLSearchParams(new URL(issued.data.url).hash.slice(1)).get('share');const grant=await learner.request('/api/share-enroll','POST',{share});assert.equal(grant.status,200);assert(Math.abs(Date.parse(grant.data.expires)-Date.now()-5000*3600000)<3000);
+  assert.equal((await admin.request('/api/shares','POST',{course:'pamm',hours:25,classroomHours:5000,confirm:true,creatorEmail:'admin@example.test',creatorName:'Admin'})).status,400);
+ }finally{await f.cleanup()}
+});
+
+test('hosted classroom names remain canonical and cannot be overridden locally',async()=>{const f=await fixture({hosting:{allowLegacyAdmin:true,classroomName:()=> 'Hosted Name',status:()=>({active:true})}});try{const admin=f.client();await admin.login();assert.equal((await admin.request('/api/admin/classroom-settings')).data.name,'Hosted Name');assert.equal((await admin.request('/api/admin/classroom-settings','PUT',{name:'Override',expectedName:'Hosted Name'})).status,409)}finally{await f.cleanup()}});
+
 test('unified instructor invitations are admin-only, single-use, course-scoped and cannot resurrect a revoked grant',async()=>{
  const f=await fixture();try{
   const admin=f.client(),a=f.client(),b=f.client();await admin.login();await admin.request('/api/admin/select','POST',{course:'pamm'});await a.select();await b.select();
@@ -597,7 +619,7 @@ test('unified share enforces duration, permission, publication and course bounda
   const admin=f.client(),learner=f.client();await admin.login();await admin.request('/api/admin/select','POST',{course:'pamm'});await learner.select();
   const body={course:'pamm',hours:2,classroomHours:3,confirm:true,creatorEmail:'teacher@example.test',creatorName:'Teacher'};
   assert.equal((await learner.request('/api/shares','POST',body)).status,403);
-  for(const bad of [0,25,1.5])assert.equal((await admin.request('/api/shares','POST',{...body,classroomHours:bad})).status,400);
+  for(const bad of [0,5001,1.5])assert.equal((await admin.request('/api/shares','POST',{...body,classroomHours:bad})).status,400);
   const legacy=await admin.request('/api/shares','POST',{...body,dualMode:false}),old=new URLSearchParams(new URL(legacy.data.url).hash.slice(1)).get('share');
   assert.equal((await fetch(f.base+'/api/share-entry',{headers:{authorization:'Bearer '+old}})).status,200);
   assert((await (await fetch(f.base+'/api/ppt-public',{headers:{authorization:'Bearer '+old,'x-ppt-visitor':'b'.repeat(64)}})).json()).preview);

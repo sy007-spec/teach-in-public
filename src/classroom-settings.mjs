@@ -1,0 +1,14 @@
+import {fail} from './security.mjs';
+import sharp from 'sharp';
+import {createHash} from 'node:crypto';
+export function classroomSettings(store,hosting){
+ const managed=typeof hosting?.classroomName==='function';
+ store.db.exec('CREATE TABLE IF NOT EXISTS classroom_logos(theme TEXT PRIMARY KEY,data BLOB NOT NULL,revision TEXT NOT NULL)');
+ const logos=()=>Object.fromEntries(['light','dark'].map(theme=>{const r=store.get('SELECT revision FROM classroom_logos WHERE theme=?',theme);return [theme,r?{url:'/api/classroom-logo?theme='+theme+'&v='+r.revision,revision:r.revision}:null]}));
+ const name=()=>managed?hosting.classroomName()||'Classroom':store.setting('classroomName','Classroom');
+ const describe=()=>({name:name(),managedExternally:managed,logos:logos()});
+ function update(body,actor){if(managed)fail(409,'Change the classroom name in hosting settings');const next=typeof body?.name==='string'?body.name.trim():'';if(!next||next.length>100||/[\u0000-\u001f\u007f]/.test(next))fail(400,'Classroom name must contain 1–100 characters');return store.transaction(()=>{const previous=name();if(body.expectedName!==previous)fail(409,'Classroom name changed; refresh and retry');store.set('classroomName',next);store.audit(actor,'classroom.renamed',{before:previous,name:next});return describe()})}
+ async function updateLogo(body,actor){const theme=body?.theme;if(!['light','dark'].includes(theme))fail(400,'Choose light or dark');let data,revision;if(body.remove!==true){if(typeof body.data!=='string'||body.data.length>2800000||!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(body.data))fail(400,'Upload a PNG, JPEG or WebP image under 2 MB');const raw=Buffer.from(body.data.split(',')[1],'base64');if(raw.length>2*1024*1024)fail(413,'Logo too large');try{data=await sharp(raw,{limitInputPixels:16000000}).rotate().resize({width:800,height:240,fit:'inside',withoutEnlargement:true}).webp({quality:90}).toBuffer()}catch{fail(400,'Invalid logo image')}revision=createHash('sha256').update(data).digest('hex').slice(0,16)}return store.transaction(()=>{const before=store.get('SELECT revision FROM classroom_logos WHERE theme=?',theme)?.revision||null;if(body.expectedRevision!==before)fail(409,'Logo changed; refresh and retry');if(body.remove===true)store.run('DELETE FROM classroom_logos WHERE theme=?',theme);else store.run('INSERT INTO classroom_logos VALUES(?,?,?) ON CONFLICT(theme) DO UPDATE SET data=excluded.data,revision=excluded.revision',theme,data,revision);store.audit(actor,'classroom.logo-updated',{theme,removed:body.remove===true,revision});return describe()})}
+ function logo(theme){if(!['light','dark'].includes(theme))fail(404,'Logo unavailable');const r=store.get('SELECT data FROM classroom_logos WHERE theme=?',theme);if(!r)fail(404,'Logo unavailable');return Buffer.from(r.data)}
+ return {name,describe,update,logos,updateLogo,logo};
+}

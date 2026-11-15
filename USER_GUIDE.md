@@ -287,3 +287,12 @@ In Access requests, administrators configure each course independently: enable t
 课堂顶部工具栏、浮动栏和阅读页使用同一分享卡片，支持复制链接、复制卡片图片、保存图片与系统分享。旧的独立PPT分享创建入口已移除。仅有当前课程分享资格时显示分享按钮；管理员可创建讲师邀请，讲师与学员不能转授讲师身份。
 
 新邀请只能成功授权一次。打开卡片、预览第一页、提交待审批申请不消耗邀请；课堂领取成功或PPT申请批准后，邀请不再向其他人开放。已获授权者按原期限继续使用。讲师邀请必须完成课堂账户验证，限定当前课程的批注、备课、讨论管理和统计，不包含发布与管理权限。已使用记录仍可撤销分享，正式课堂/讲师授权分别在既有授权管理入口撤销。
+
+
+### 课堂名称与徽标 / Classroom branding
+
+管理员在“内容 → 课堂设置”修改名称并上传浅色、深色徽标（PNG/JPEG/WebP，最大 2 MB）。徽标保存在本站，显示于课堂顶部、分享卡片与接收页；导出图片使用当前主题徽标。托管课堂名称由托管平台管理。已导出图片不自动更新。
+
+Administrators can configure names and light/dark logos under Content → Classroom settings. Logos are stored locally and included in headers, share cards, landing pages and exported images. Hosted names remain managed by the hosting platform. Previously exported images do not update automatically.
+
+课堂授权支持 1–5000 整数小时；PPT 时长仍按课程上限单独控制。Classroom authorization supports 1–5000 whole hours; PPT reading retains its separate course limit.

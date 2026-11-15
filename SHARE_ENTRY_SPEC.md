@@ -29,3 +29,12 @@
 ## 验证
 
 `npm test` 覆盖新增邀请的权限、签名、课程隔离、未验证账户拒绝、一次性授权、过期与撤销及历史分享兼容。`tests/share-entry-browser.cjs` 验证真实浏览器中的卡片下载、桌面/手机入口、自动填入口令、账户验证到正式课堂的流程、PPT 刷新期限及两种期限独立。
+
+
+### 课堂名称与徽标 / Classroom branding
+
+管理员在“内容 → 课堂设置”修改名称并上传浅色、深色徽标（PNG/JPEG/WebP，最大 2 MB）。徽标保存在本站，显示于课堂顶部、分享卡片与接收页；导出图片使用当前主题徽标。托管课堂名称由托管平台管理。已导出图片不自动更新。
+
+Administrators can configure names and light/dark logos under Content → Classroom settings. Logos are stored locally and included in headers, share cards, landing pages and exported images. Hosted names remain managed by the hosting platform. Previously exported images do not update automatically.
+
+课堂授权支持 1–5000 整数小时；PPT 时长仍按课程上限单独控制。Classroom authorization supports 1–5000 whole hours; PPT reading retains its separate course limit.
