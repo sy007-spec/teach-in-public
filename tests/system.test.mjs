@@ -14,10 +14,10 @@ test('unified instructor invitations are admin-only, single-use, course-scoped a
  const f=await fixture();try{
   const admin=f.client(),a=f.client(),b=f.client();await admin.login();await admin.request('/api/admin/select','POST',{course:'pamm'});await a.select();await b.select();
   const body={course:'pamm',hours:2,classroomHours:3,instructor:true,confirm:true,creatorEmail:'admin@example.test',creatorName:'Admin'};
-  assert.equal((await admin.request('/api/ppt-shares','POST',body)).status,404);
+  assert.equal((await admin.request('/api/ppt-share-policy?course=pamm')).status,200);
   f.store.set('pptPolicy:pamm',{allowAll:true,maxHours:24});await admin.request('/api/admin/whitelist','POST',{course:'pamm',cidr:'127.0.0.1'});
   assert.equal((await a.request('/api/shares','POST',body)).status,403);
-  const issued=await admin.request('/api/shares','POST',body);assert.equal(issued.status,201);assert.equal(issued.data.instructor,true);assert.equal(issued.data.singleUse,true);assert.equal(issued.data.pptUrl,null);
+  assert.equal((await a.request('/api/ppt-shares','POST',body)).status,403);const issued=await admin.request('/api/ppt-shares','POST',body);assert.equal(issued.status,201);assert.equal(issued.data.instructor,true);assert.equal(issued.data.singleUse,true);assert.equal(issued.data.pptUrl,null);
   const share=new URLSearchParams(new URL(issued.data.url).hash.slice(1)).get('share'),headers={authorization:'Bearer '+share,'x-ppt-visitor':'a'.repeat(64)};
   assert.equal((await fetch(f.base+'/api/ppt-public',{headers})).status,403);
   const results=await Promise.all([a.request('/api/share-enroll','POST',{share}),b.request('/api/share-enroll','POST',{share})]);assert.deepEqual(results.map(r=>r.status).sort(),[200,410]);

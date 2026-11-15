@@ -9,6 +9,7 @@ export function compactHeader(header=document.querySelector('header')){
   const key=paths[el.id]?el.id:href.includes('github.com')?'source':href.startsWith('/instructor')?'instructor':href.startsWith('/admin')?'admin':href.includes('/dashboard')?'hosting':'home';
   el.title=label;el.setAttribute('aria-label',label);el.classList.add('header-icon');
   el.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+paths[key]+'"/></svg>';
+  if(['shareCourse','sharePpt'].includes(el.id)){el.classList.add('header-share');const caption=document.createElement('span');caption.textContent=document.documentElement.lang.startsWith('zh')?'分享':'Share';el.append(caption)}
  }
 }
 

@@ -206,7 +206,7 @@ export function createApp(options={}){
  const restoreBackup=classroomRestore(store,quota),storage=contentStorage(store,options.hosting);
  const server=http.createServer(async(req,res)=>{
   res.setHeader('x-content-type-options','nosniff');res.setHeader('referrer-policy','same-origin');res.setHeader('x-frame-options','SAMEORIGIN');res.setHeader('permissions-policy','camera=(), microphone=(), geolocation=()');res.setHeader('content-security-policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src 'self' https:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
-  const url=new URL(req.url,origin),p=url.pathname;let s,releaseWork;
+  const url=new URL(req.url,origin),legacySharePaths={'/api/ppt-share-policy':'/api/share-policy','/api/ppt-shares':'/api/shares','/api/ppt-shares/item':'/api/shares/item','/api/admin/ppt-shares':'/api/admin/shares','/api/admin/ppt-shares/manage':'/api/admin/shares/manage','/api/admin/ppt-shares/decision':'/api/admin/shares/decision','/api/admin/ppt-visitors':'/api/admin/share-visitors','/api/admin/ppt-visitors/decision':'/api/admin/share-visitors/decision'},p=legacySharePaths[url.pathname]||url.pathname;let s,releaseWork;
   try{
    if(p==='/_project/enter'&&req.projectIdentity&&req.method==='GET'){
     const identity=req.projectIdentity,member=principals.admit(identity,identity.course);
