@@ -282,11 +282,11 @@ In Access requests, administrators configure each course independently: enable t
 助教默认使用提问时的界面语言直接回答，不要求JSON、固定字段、精确引用编号或同时生成中英文。普通Markdown和既有单语/双语回答均可展示，参考资料由系统从实际检索结果附上。模型达到输出长度上限时保留已收到的正文并提示可以追问。自动内容核验未完成时保留回答并明确提示；明确的内容冲突仍需讲师确认。课程、讨论权限和资料有效性校验不变。
 
 
-## 统一分享卡片与一次性讲师邀请
+## 统一分享卡片与限时讲师邀请
 
 课堂顶部工具栏、浮动栏和阅读页使用同一分享卡片，支持复制链接、复制卡片图片、保存图片与系统分享。旧的独立PPT分享创建入口已移除。仅有当前课程分享资格时显示分享按钮；管理员可创建讲师邀请，讲师与学员不能转授讲师身份。
 
-普通分享不限人数和使用次数，每位接收者分别获得授权。只有讲师邀请在成功授权一次后失效；已授权者按原期限继续使用。历史普通分享也可重复使用，已撤销链接仍不可用。讲师邀请必须完成课堂账户验证，限定当前课程的批注、备课、讨论管理和统计，不包含发布与管理权限。已使用记录仍可撤销分享，正式课堂/讲师授权分别在既有授权管理入口撤销。
+普通分享不限人数和使用次数，每位接收者分别获得授权。讲师邀请不限人数，链接默认创建后1天到期，可拖动调整有效期；已授权者按原期限继续使用。历史普通分享也可重复使用，已撤销链接仍不可用。讲师邀请必须完成课堂账户验证，限定当前课程的批注、备课、讨论管理和统计，不包含发布与管理权限。已使用记录仍可撤销分享，正式课堂/讲师授权分别在既有授权管理入口撤销。
 
 
 ### 课堂名称与徽标 / Classroom branding
@@ -296,3 +296,6 @@ In Access requests, administrators configure each course independently: enable t
 Administrators can configure names and light/dark logos under Content → Classroom settings. Logos are stored locally and included in headers, share cards, landing pages and exported images. Hosted names remain managed by the hosting platform. Previously exported images do not update automatically.
 
 课堂授权支持 1–5000 整数小时；PPT 时长仍按课程上限单独控制。Classroom authorization supports 1–5000 whole hours; PPT reading retains its separate course limit.
+
+
+分享创建界面使用滑条及快捷时长按钮调节PPT阅读、课堂授权和讲师链接有效期。讲师链接期限从创建起算；课堂/讲师授权期限从个人领取起算。Instructor links support unlimited recipients until a fixed deadline (default 24 hours from creation). Duration sliders and presets control all share durations. Existing recipient grants retain their individual expiry.

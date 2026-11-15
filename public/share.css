@@ -20,3 +20,5 @@ dialog:has(.share-result){width:min(820px,96vw);max-height:calc(100dvh - 24px);p
 @media(max-width:520px){#dialogContent .share-result .ppt-qr{width:96px;height:96px}.reading-share.share-result{gap:8px}.share-result input#shareUrl{min-height:44px}}
 
 .share-language-bar{max-width:650px;margin:auto;padding:12px 18px 0;display:flex;justify-content:flex-end}.share-language-bar+.share-landing{padding-top:16px}
+
+.share-duration{display:grid;gap:8px}.share-duration output{font-weight:700;color:var(--accent,#4338a8)}.share-duration input[type=range]{width:100%;min-height:32px;accent-color:#6355cc}.duration-presets{display:flex;gap:6px;flex-wrap:wrap}.duration-presets button{padding:5px 10px;font-size:12px}#invitationDuration[hidden],#pptDuration[hidden]{display:none}

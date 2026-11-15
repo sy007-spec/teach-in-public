@@ -2,10 +2,10 @@
 
 课堂顶部工具栏、浮动栏与阅读页共用一个分享组件、卡片和 `/api/shares` 接口。旧弹窗及独立创建逻辑已移除；升级前已打开页面的旧接口路径仅映射到同一个统一服务，继续执行相同权限及分享规则。拥有课程分享权限的人可设置阅读及课堂授权时长，生成课程卡片、二维码及链接，复制链接、复制 PNG 图片、保存图片或调用设备分享。图片剪贴板不可用时明确提示保存图片，不声称复制成功。时长均为整数小时；PPT受课程上限控制（默认24，最多168），课堂授权最多5000小时。卡片采用 EduSquare 参考页面的暖色封面、圆角卡片和紫色重点色。
 
-## 一次性邀请与角色
+## 限时邀请与角色
 
 - 普通分享不限接收人数或使用次数，每位接收者分别完成PPT审批或课堂账户验证；领取授权不消耗链接。历史普通分享也恢复为可重复使用，撤销状态与既有授权期限保持不变。
-- 只有讲师邀请成功授权一人后失效，服务端事务原子消费；打开卡片不消耗邀请。已领取者的重复请求不重置期限、不恢复撤销。管理员调整已发放权限不重新开放讲师邀请。
+- 讲师邀请不限人数，链接从创建起默认有效24小时，可用滑条调整1–5000小时；截止时刻到期后不再接受领取。已领取者的重复请求不重置期限、不恢复撤销。已领取权限保留原期限，重复领取不延长权限或恢复撤销。
 - 管理员可选择讲师邀请；普通讲师和学员仅在课程默认或邮箱分享授权允许时分享，不能邀请讲师。前端按服务端能力显示顶部和浮动入口，接口重新验证身份、课程读取资格及分享权限。
 - 讲师邀请仅通过课堂账户验证领取，授予当前课程批注、草稿、讨论管理和聚合统计能力，不授予发布、版本管理、权限管理或全站管理员。期限使用课堂授权时长。已有有效讲师授权保持原配置；停用、过期账号或已过期授权需管理员处理，不借邀请复活。课程授权在既有讲师管理入口撤销。
 
@@ -28,7 +28,7 @@
 
 ## 验证
 
-`npm test` 覆盖新增邀请的权限、签名、课程隔离、未验证账户拒绝、一次性授权、过期与撤销及历史分享兼容。`tests/share-entry-browser.cjs` 验证真实浏览器中的卡片下载、桌面/手机入口、自动填入口令、账户验证到正式课堂的流程、PPT 刷新期限及两种期限独立。
+`npm test` 覆盖新增邀请的权限、签名、课程隔离、未验证账户拒绝、限时多人授权、过期与撤销及历史分享兼容。`tests/share-entry-browser.cjs` 验证真实浏览器中的卡片下载、桌面/手机入口、自动填入口令、账户验证到正式课堂的流程、PPT 刷新期限及两种期限独立。
 
 
 ### 课堂名称与徽标 / Classroom branding
@@ -48,3 +48,6 @@ Browser acceptance covers 1366×768, 1280×720, 1024×600 and 390×844: all prev
 ## Invitation language switching (2026-11-15)
 
 The course invitation landing page exposes a visible English/中文 control in the upper right, including loading, instructor invitations and unavailable-link states. Switching updates the page, document language/title and stored language preference without a reload or another share-entry request. The bearer invitation remains unchanged; PPT/classroom destination fragments carry the selected language without altering their access tokens. Browser checks cover both directions, same-document navigation, unchanged invitation token, no extra entry fetch or read-window creation, instructor-only access and bilingual revoked-state messages.
+
+
+分享创建界面使用滑条及快捷时长按钮调节PPT阅读、课堂授权和讲师链接有效期。讲师链接期限从创建起算；课堂/讲师授权期限从个人领取起算。Instructor links support unlimited recipients until a fixed deadline (default 24 hours from creation). Duration sliders and presets control all share durations. Existing recipient grants retain their individual expiry.
