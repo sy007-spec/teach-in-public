@@ -44,3 +44,7 @@ Administrators can configure names and light/dark logos under Content → Classr
 The generated share result uses a wide, compact preview with course content on the left and QR/scan instructions on the right. The preview adapts to available dialog height; ordinary laptop viewports show the complete card, URL and action buttons together. Narrow screens retain a readable QR and two-column actions. Exceptionally long content can scroll inside the preview without pushing actions below the window. PNG export remains full resolution and is independent from preview dimensions.
 
 Browser acceptance covers 1366×768, 1280×720, 1024×600 and 390×844: all preview imagery and copy/save actions remain in the viewport, ordinary fixture content has no internal clipping, and no page horizontal overflow. Copy-image, PNG download, classroom/instructor invitations and revocation continue to pass.
+
+## Invitation language switching (2026-11-15)
+
+The course invitation landing page exposes a visible English/中文 control in the upper right, including loading, instructor invitations and unavailable-link states. Switching updates the page, document language/title and stored language preference without a reload or another share-entry request. The bearer invitation remains unchanged; PPT/classroom destination fragments carry the selected language without altering their access tokens. Browser checks cover both directions, same-document navigation, unchanged invitation token, no extra entry fetch or read-window creation, instructor-only access and bilingual revoked-state messages.

@@ -1,11 +1,22 @@
 import {classroomLogo} from './share-card.js';
 import {esc} from './render.js';
-import {readLanguage} from './language.js';
-const root=document.getElementById('shareRoot'),params=new URLSearchParams(location.hash.slice(1)),raw=params.get('share'),lang=readLanguage(params.get('lang')||'zh'),t=(zh,en)=>lang==='zh'?zh:en;
-document.documentElement.lang=lang==='zh'?'zh-CN':'en';
-try{
- const response=await fetch('/api/share-entry',{headers:{authorization:'Bearer '+(raw||'')},credentials:'omit',cache:'no-store'}),d=await response.json();if(!response.ok)throw Error(d.error);
- root.innerHTML='<div class="share-brand">'+classroomLogo(d)+'<strong>'+esc(d.classroomName||t('课堂','Classroom'))+'</strong> <span>'+t('课程邀请','COURSE INVITATION')+'</span></div><div class="share-cover" aria-hidden="true">'+esc([...(d.title[lang]||d.title.zh||d.title.en)][0])+'</div><h1>'+esc(d.title[lang]||d.title.zh||d.title.en)+'</h1><p>'+t('选择适合你的阅读方式','Choose how you want to learn')+'</p><label>'+t('课程口令（已自动填入）','Course code (automatically filled)')+'<input readonly value="'+esc(d.code)+'"></label><div class="share-choice"><a id="readPpt" class="primary-choice" href="'+esc(d.pptUrl)+'"><strong>'+t('PPT 阅读','PPT reading')+'</strong><p>'+t('第一页无需登录、无需审批即可阅读。打开下一页时提交申请，获管理员批准后继续阅读。','Read the first page without sign-in or approval. Request administrator approval when opening the next page to continue.')+'</p><span class="share-cta">'+t('开始阅读 →','Start reading →')+'</span></a><a id="joinClassroom" href="'+esc(d.classroomUrl)+'"><strong>'+t('课堂模式','Classroom')+'</strong><p>'+t('登记邮箱并完成账户验证，获得 ','Register your email and verify your account for ')+d.classroomHours+t(' 小时正式课程授权，可使用笔记和问答。',' hours of classroom access, with notes and discussion.')+'</p><span class="share-cta">'+t('登记邮箱并进入 →','Register and enter →')+'</span></a></div><p class="small muted">'+t('已有授权按原期限执行；被撤销的授权需联系管理员。','Existing access retains its original term. Contact the administrator for revoked access.')+'</p>';
+import {readLanguage,saveLanguage,languageButton} from './language.js';
+const root=document.getElementById('shareRoot'),toolbar=document.getElementById('shareLanguage'),params=new URLSearchParams(location.hash.slice(1)),raw=params.get('share');
+let lang=['zh','en'].includes(params.get('lang'))?params.get('lang'):readLanguage('zh'),entry=null,failed=false;
+const t=(zh,en)=>lang==='zh'?zh:en;
+function languageUrl(value){const u=new URL(value,location.href),fragment=new URLSearchParams(u.hash.slice(1));fragment.set('lang',lang);u.hash=fragment;return u.href;}
+function render(){
+ document.documentElement.lang=lang==='zh'?'zh-CN':'en';document.title=t('课程邀请 · TeachInPublic','Course invitation · TeachInPublic');
+ toolbar.innerHTML=languageButton(lang,'shareLanguageToggle');
+ document.getElementById('shareLanguageToggle').onclick=()=>{lang=lang==='zh'?'en':'zh';saveLanguage(lang);const u=new URL(location.href),fragment=new URLSearchParams(u.hash.slice(1));fragment.set('lang',lang);u.hash=fragment;history.replaceState(null,'',u);render();document.getElementById('shareLanguageToggle').focus();};
+ if(failed){root.innerHTML='<h1>'+t('分享暂时不可用','Share unavailable')+'</h1><p>'+t('链接已使用、无效、已撤销或课程已撤回，请联系分享者。','The link is used, invalid, revoked or the course is unavailable. Contact the sharer.')+'</p>';return;}
+ if(!entry){root.textContent=t('正在打开课程…','Opening course…');return;}
+ const d=entry;
+ root.innerHTML='<div class="share-brand">'+classroomLogo(d)+'<strong>'+esc(d.classroomName||t('课堂','Classroom'))+'</strong> <span>'+t('课程邀请','COURSE INVITATION')+'</span></div><div class="share-cover" aria-hidden="true">'+esc([...(d.title[lang]||d.title.zh||d.title.en)][0])+'</div><h1>'+esc(d.title[lang]||d.title.zh||d.title.en)+'</h1><p>'+t('选择适合你的阅读方式','Choose how you want to learn')+'</p><label>'+t('课程口令（已自动填入）','Course code (automatically filled)')+'<input readonly value="'+esc(d.code)+'"></label><div class="share-choice"><a id="readPpt" class="primary-choice" href="'+esc(languageUrl(d.pptUrl))+'"><strong>'+t('PPT 阅读','PPT reading')+'</strong><p>'+t('第一页无需登录、无需审批即可阅读。打开下一页时提交申请，获管理员批准后继续阅读。','Read the first page without sign-in or approval. Request administrator approval when opening the next page to continue.')+'</p><span class="share-cta">'+t('开始阅读 →','Start reading →')+'</span></a><a id="joinClassroom" href="'+esc(languageUrl(d.classroomUrl))+'"><strong>'+t('课堂模式','Classroom')+'</strong><p>'+t('登记邮箱并完成账户验证，获得 ','Register your email and verify your account for ')+d.classroomHours+t(' 小时正式课程授权，可使用笔记和问答。',' hours of classroom access, with notes and discussion.')+'</p><span class="share-cta">'+t('登记邮箱并进入 →','Register and enter →')+'</span></a></div><p class="small muted">'+t('已有授权按原期限执行；被撤销的授权需联系管理员。','Existing access retains its original term. Contact the administrator for revoked access.')+'</p>';
  if(d.instructor){document.getElementById('readPpt').remove();document.querySelector('#joinClassroom strong').textContent=t('讲师邀请','Instructor invitation');document.querySelector('#joinClassroom p').textContent=t('完成账户验证后，获得本课程限时讲师权限。','Verify your account to receive a time-limited instructor grant for this course.')}
  if(d.singleUse){const note=document.createElement('p');note.textContent=t('仅可成功授权一次，成功后邀请失效；已获授权可继续使用。','One recipient only. The invitation expires after authorization; granted access continues.');root.append(note)}
-}catch{root.innerHTML='<h1>'+t('分享暂时不可用','Share unavailable')+'</h1><p>'+t('链接已使用、无效、已撤销或课程已撤回，请联系分享者。','The link is used, invalid, revoked or the course is unavailable. Contact the sharer.')+'</p>'}
+
+}
+render();
+try{const response=await fetch('/api/share-entry',{headers:{authorization:'Bearer '+(raw||'')},credentials:'omit',cache:'no-store'});const d=await response.json();if(!response.ok)throw Error(d.error);entry=d;}catch{failed=true;}
+render();
